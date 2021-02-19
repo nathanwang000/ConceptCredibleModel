@@ -1,0 +1,8 @@
+ICBM stands for Incomplete Concept Bottleneck Model
+
+It aims to address
+
+a) address issue with CBM when concept set is incomplete
+b) leverage feature based attribution methods for high level features
+
+
