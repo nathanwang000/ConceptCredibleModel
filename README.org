@@ -4,11 +4,13 @@ It aims to
 
 a) address issues with CBM when concept set is incomplete
 b) leverage feature based attribution methods for high level features
-c) establish current problems of training CBM models
 
 [[credibility.ipynb][credibility.ipynb]] contains ideas to extend rationale from binary to real number
 
-
+Two main messages:
+1. Extend credible model to tasks with not interpretable raw features
+   (eg. latent factors such as angle and others)
+2. Extend binary risk factors to multiple real valued medial knowledge
 
 
 
