@@ -1,4 +1,4 @@
-* ICBM stands for Incomplete Concept Bottleneck Model
+* CCM stands for credible concept model
 
 It aims to
 
@@ -7,10 +7,13 @@ b) leverage feature based attribution methods for high level features
 
 [[credibility.ipynb][credibility.ipynb]] contains ideas to extend rationale from binary to real number
 
-Two main messages:
+Three ideas:
 1. Extend credible model to tasks with not interpretable raw features
    (eg. latent factors such as angle and others)
 2. Extend binary risk factors to multiple real valued medial knowledge
+3. Expand interpretability to multimodality context: e.g. image to caption
+   translation can be used for explanation (in some context words are better for
+   explanation, in other context image may be the better medium for explanation)
 
 
 
