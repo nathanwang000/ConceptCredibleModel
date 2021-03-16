@@ -15,6 +15,4 @@ Three ideas:
    translation can be used for explanation (in some context words are better for
    explanation, in other context image may be the better medium for explanation)
 
-
-
-
+Google slides for those ideas are tracked in [[https://docs.google.com/presentation/d/12z6bVIWCeoK-vYjLjFkWsk00FOjvtsgjV03zM-15uI0/edit#slide=id.gc30c2b4595_0_68][here]].
