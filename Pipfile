@@ -8,6 +8,7 @@ jupyter = "*"
 numpy = "*"
 jupyterlab = "*"
 torch = "*"
+matplotlib = "*"
 
 [requires]
 python_version = "3.7"
