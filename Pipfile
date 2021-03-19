@@ -9,6 +9,8 @@ numpy = "*"
 jupyterlab = "*"
 torch = "*"
 matplotlib = "*"
+shap = "*"
+xgboost = "*"
 
 [requires]
 python_version = "3.7"
