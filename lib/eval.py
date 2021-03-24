@@ -45,10 +45,11 @@ def shap_net_x(net, shap_x, bs, instance_idx=None, output_idx=None, decimal=2, o
                             DataLoader(TensorDataset(torch.from_numpy(np.array(shap_x))), 
                                        batch_size=bs, shuffle=False))
     d_o = prediction.shape[1]
+    df_o = pd.DataFrame(dict((f"{output_name}{i}", np.around(prediction[:, i], decimal)) for i in range(d_o)))
+    df_o.set_index(shap_x.index, inplace=True)
 
     print(
-        pd.concat((shap_x.astype(int), 
-                   pd.DataFrame(dict((f"{output_name}{i}", np.around(prediction[:, i], decimal)) for i in range(d_o)))), 
+        pd.concat((shap_x, df_o), 
                   1).sort_values(f"{output_name}0"))
 
     def explain_one_output(i):
@@ -58,7 +59,7 @@ def shap_net_x(net, shap_x, bs, instance_idx=None, output_idx=None, decimal=2, o
         explainer = shap.KernelExplainer(lambda x: net(torch.from_numpy(x)).detach()[:, i].numpy(), 
                                          shap_x)
         shap_values = explainer.shap_values(shap_x, nsamples=100)
-        if instance_idx:
+        if instance_idx != None:
             shap.summary_plot(shap_values[instance_idx:instance_idx+1], shap_x[instance_idx:instance_idx+1])
         else:
             shap.summary_plot(shap_values, shap_x)
