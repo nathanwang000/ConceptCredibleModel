@@ -6,6 +6,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import TensorDataset, DataLoader
+from sklearn import metrics, utils
+from joblib import Parallel, delayed
+
 # custom import
 from lib.models import CCM
 
@@ -14,7 +17,25 @@ def get_output(net, loader_x):
     for x, in loader_x:
         o.extend(net(x).detach().numpy())
     return np.vstack(o) # (n, c)
-                        
+
+def bootstrap(metric, y_hat, y, l=0.25, h=97.5, n=100, n_jobs=4):
+    '''
+    https://ocw.mit.edu/courses/mathematics/18-05-introduction-to-probability-and-statistics-spring-2014/readings/MIT18_05S14_Reading24.pdf
+    metric: (y_hat, y) -> R+
+    l and high are percentiles
+    n_jobs: number of parallel jobs
+    '''
+    def b_helper(y_hat, y):
+        return metric(*utils.resample(y_hat, y, replace=True))
+    
+    s = metric(y_hat, y)    
+    scores = Parallel(n_jobs=n_jobs)(
+        delayed(b_helper)(y_hat, y) for i in range(n))
+    scores = np.array(scores)
+    delta = scores - s
+    dl, dh = np.percentile(delta, (l, h))
+    return s - dh, s - dl
+
 def test(net, loader, criterion):
     net.eval()
     losses = []

@@ -11,6 +11,9 @@ torch = "*"
 matplotlib = "*"
 shap = "*"
 xgboost = "*"
+six = "*"
+joblib = "*"
+sklearn = "*"
 
 [requires]
 python_version = "3.7"
