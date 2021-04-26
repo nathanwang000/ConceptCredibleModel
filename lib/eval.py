@@ -18,7 +18,7 @@ def get_output(net, loader_x):
         o.extend(net(x).detach().numpy())
     return np.vstack(o) # (n, c)
 
-def bootstrap(metric, y_hat, y, l=0.25, h=97.5, n=100, n_jobs=4):
+def bootstrap(metric, y_hat, y, l=2.5, h=97.5, n=100, n_jobs=4):
     '''
     https://ocw.mit.edu/courses/mathematics/18-05-introduction-to-probability-and-statistics-spring-2014/readings/MIT18_05S14_Reading24.pdf
     metric: (y_hat, y) -> R+
