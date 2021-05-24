@@ -18,29 +18,30 @@ def get_output(net, loader_x):
         o.extend(net(x).detach().numpy())
     return np.vstack(o) # (n, c)
 
-def bootstrap(metric, y_hat, y, l=2.5, h=97.5, n=100, n_jobs=4):
+def bootstrap(metric, y, y_hat, l=2.5, h=97.5, n=100, n_jobs=4):
     '''
     https://ocw.mit.edu/courses/mathematics/18-05-introduction-to-probability-and-statistics-spring-2014/readings/MIT18_05S14_Reading24.pdf
-    metric: (y_hat, y) -> R+
+    metric: (y, y_hat) -> R+
     l and high are percentiles
     n_jobs: number of parallel jobs
     '''
-    def b_helper(y_hat, y):
-        return metric(*utils.resample(y_hat, y, replace=True))
+    def b_helper(y, y_hat):
+        return metric(*utils.resample(y, y_hat, replace=True))
     
-    s = metric(y_hat, y)    
+    s = metric(y, y_hat)    
     scores = Parallel(n_jobs=n_jobs)(
-        delayed(b_helper)(y_hat, y) for i in range(n))
+        delayed(b_helper)(y, y_hat) for i in range(n))
     scores = np.array(scores)
     delta = scores - s
     dl, dh = np.percentile(delta, (l, h))
     return s - dh, s - dl
 
-def test(net, loader, criterion):
+def test(net, loader, criterion, device='cpu'):
     net.eval()
     losses = []
     total = 0
     for x, y in loader:
+        x, y = x.to(device), y.to(device)
         o = net(x)
         l = criterion(o, y).mean()
         bs = o.shape[0]

@@ -10,6 +10,12 @@ def train_step_standard(net, loader, opt, criterion, device='cpu'):
         x, y = x.to(device), y.to(device)
         opt.zero_grad()
         o = net(x)
+        try:
+            o.shape
+        except Exception as e:
+            # for inception module
+            o = o[0]
+            
         l = criterion(o, y).mean()
         l.backward()
         opt.step()
@@ -43,7 +49,6 @@ def train(net, loader, opt, train_step=train_step_standard,
         losses.extend(_losses)
         
         train_report = {"loss": np.mean(losses[-len(loader):])}
-        
         if (i+1) % report_every == 0: # report loss
             print('epoch {:>3}: '.format(i) + ' '.join('{} {:.3e}'.format(
                       name, val
