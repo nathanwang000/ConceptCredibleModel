@@ -16,6 +16,8 @@ joblib = "*"
 sklearn = "*"
 sympy = "*"
 graphviz = "*"
+seaborn = "*"
+scikit-learn-extra = "*"
 
 [requires]
 python_version = "3.7"

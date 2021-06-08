@@ -1,12 +1,14 @@
+import tqdm
 import torch.nn.functional as F
 import numpy as np
 import matplotlib.pyplot as plt
+import torch
 # custom import
 from lib.models import CBM
 
 def train_step_standard(net, loader, opt, criterion, device='cpu'):
     losses = []
-    for x, y in loader:
+    for x, y in tqdm.tqdm(loader, desc="train step for 1 epoch"):
         x, y = x.to(device), y.to(device)
         opt.zero_grad()
         o = net(x)
@@ -39,7 +41,11 @@ def train_step_xyz(net, loader, opt, criterion, device='cpu'):
 
 def train(net, loader, opt, train_step=train_step_standard, 
           criterion=F.cross_entropy, n_epochs=10, report_every=1,
-          device="cpu"):
+          device="cpu", savepath=None, report_dict={}):
+    '''
+    report dict take the form: {"func_name": f} where f takes net as input
+    an example is {"val_loss": lambda net: get_loss(net, val_loader)}
+    '''
     net.train()
     train_log, losses = [], []
 
@@ -49,6 +55,7 @@ def train(net, loader, opt, train_step=train_step_standard,
         losses.extend(_losses)
         
         train_report = {"loss": np.mean(losses[-len(loader):])}
+        train_report.update(dict((name, f(net)) for name, f in report_dict.items()))
         if (i+1) % report_every == 0: # report loss
             print('epoch {:>3}: '.format(i) + ' '.join('{} {:.3e}'.format(
                       name, val
@@ -56,6 +63,10 @@ def train(net, loader, opt, train_step=train_step_standard,
 
         train_report.update({'epoch': i})
         train_log.append(train_report)
+
+        if savepath:
+            torch.save(net, savepath + '.pt')
+            torch.save(train_log, savepath + '.log')
 
     return train_log    
 

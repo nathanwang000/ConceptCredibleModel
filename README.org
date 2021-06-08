@@ -10,13 +10,14 @@ b) leverage feature based attribution methods for high level features
 Three ideas:
 1. Extend credible model to tasks with not interpretable raw features
    (eg. latent factors such as angle and others)
-2. Extend binary risk factors to multiple real valued medial knowledge
-3. Expand interpretability to multimodality context: e.g. image to caption
+2. Expand interpretability to multimodality context: e.g. image to caption
    translation can be used for explanation (in some context words are better for
    explanation, in other context image may be the better medium for explanation)
 
-Google slides for those ideas are tracked in [[https://docs.google.com/presentation/d/12z6bVIWCeoK-vYjLjFkWsk00FOjvtsgjV03zM-15uI0/edit#slide=id.gc30c2b4595_0_68][here]].
+* Software
 
+  visualization code adapted from [[https://github.com/utkuozbulak/pytorch-cnn-visualizations/blob/master/src/vanilla_backprop.py][here]].
+  
 * Software issues
 
 MLD4 server uses cuda 10.1 which is no longer supported by pytorch

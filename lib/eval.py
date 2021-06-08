@@ -1,4 +1,6 @@
 import shap
+import math
+import tqdm
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -11,6 +13,7 @@ from joblib import Parallel, delayed
 
 # custom import
 from lib.models import CCM
+from lib.utils import attribute2idx
 
 def get_output(net, loader_x):
     o = []
@@ -40,7 +43,7 @@ def test(net, loader, criterion, device='cpu'):
     net.eval()
     losses = []
     total = 0
-    for x, y in loader:
+    for x, y in tqdm.tqdm(loader, desc="test eval"):
         x, y = x.to(device), y.to(device)
         o = net(x)
         l = criterion(o, y).mean()
@@ -143,3 +146,110 @@ def shap_ccm_c(ccm, shap_x, bs, instance_idx=None, output_idx=None, c_name='Z', 
     else:
         for i in range(d_o):
             explain_one_output(i)
+
+
+# other attribution methods adapted from https://github.com/utkuozbulak/pytorch-cnn-visualizations/blob/master/src/vanilla_backprop.py; note that the github implementation is incorrect (e.g., integrated gradient didn't scale by image and assumes model has features attributes); mine is better
+class VanillaBackprop():
+    """
+        Produces gradients generated with vanilla back propagation from the image
+        adapted from https://github.com/utkuozbulak/pytorch-cnn-visualizations/blob/master/src/vanilla_backprop.py
+    """
+    def __init__(self, model):
+        self.model = model
+        # Put model in evaluation mode
+        self.model.eval()
+
+    def explain(self, input_image, target_class):
+        # generate_gradients
+        # Forward
+        input_image.requires_grad = True # must so that input can have grad
+        model_output = self.model(input_image)
+        # Zero grads
+        self.model.zero_grad()
+        # Target for backprop
+        one_hot_output = torch.FloatTensor(1, model_output.size()[-1]).zero_()
+        one_hot_output[0][target_class] = 1
+        # Backward pass
+        model_output.backward(gradient=one_hot_output.to(model_output.device))
+        # Convert Pytorch variable
+        # [0] to get rid of the first channel (1,3,224,224)
+        gradients_as_arr = input_image.grad.data[0].cpu() # self.gradients.data.numpy()[0]
+        return gradients_as_arr
+
+class IntegratedGradients():
+    """
+        Produces gradients generated with integrated gradients from the image
+    """
+    def __init__(self, model, steps):
+        self.model = model
+        self.steps = steps
+        # Put model in evaluation mode
+        self.model.eval()
+
+    def generate_images_on_linear_path(self, input_image, steps):
+        # Generate uniform numbers between 0 and steps
+        step_list = np.arange(steps+1)/steps
+        # Generate scaled xbar images: assumes 0 is the background image
+        xbar_list = [input_image*step for step in step_list]
+        return xbar_list
+
+    def generate_gradients(self, input_image, target_class):
+        # Forward
+        input_image.requires_grad = True # must so that input can have grad
+        model_output = self.model(input_image)
+        # Zero grads
+        self.model.zero_grad()
+        # Target for backprop
+        one_hot_output = torch.FloatTensor(1, model_output.size()[-1]).zero_()
+        one_hot_output[0][target_class] = 1
+        # Backward pass
+        model_output.backward(gradient=one_hot_output.to(model_output.device))
+        # Convert Pytorch variable
+        # [0] to get rid of the first channel (1,3,224,224)
+        gradients_as_arr = input_image.grad.data[0].cpu() # self.gradients.data.numpy()[0]
+        return gradients_as_arr
+        
+    def explain(self, input_image, target_class):
+        # generate_integrated_gradients
+        steps = self.steps
+        # Generate xbar images
+        xbar_list = self.generate_images_on_linear_path(input_image, steps)
+        # Initialize an image composed of zeros
+        integrated_grads = torch.zeros_like(input_image).cpu()
+        for xbar_image in xbar_list:
+            # Generate gradients from xbar images
+            single_integrated_grad = self.generate_gradients(xbar_image, target_class)
+            # Add rescaled grads from xbar images
+            integrated_grads = integrated_grads + single_integrated_grad/steps
+        # [0] to get rid of the first channel (1,3,224,224)
+        # return integrated_grads[0] # should probably times input image by the original paper
+        # this differs from the online implementation (their version is wrong b/c it should be scaled by size along each direction, not a global step)
+        return (integrated_grads * input_image.cpu())[0] # background value of 0
+
+def show_attribution(dataset, models, attributes, idx, explain_method=VanillaBackprop, n_col=5, device='cuda'):
+    '''
+    show feature attribution of models to input
+    '''
+    im, y, attr = dataset[idx]['x'].permute(1,2,0), dataset[idx]['y'], dataset[idx]['attr']
+    print('0-indexed class id (describe bird is 1-indexed):', y)
+    plt.figure(figsize=(18,6))
+    plt.subplot(math.ceil(float(len(models)+1) / n_col), n_col, 1)
+    plt.imshow((im - im.min()) / (im.max() - im.min()))
+    plt.axis('off')
+
+    for i in range(len(models)):
+        explain = explain_method(models[i]) # IntegratedGradients(models[i])
+        # Generate attribution
+        target_class = int(attr[attribute2idx(attributes[i]) - 1].item())
+        attribution = explain.explain(dataset[idx]['x'].unsqueeze(0).to(device),
+                                      target_class)
+
+        plt.subplot(math.ceil(float(len(models)+1) / n_col), n_col, i+2)
+        # save as convert2grayscale image in the online visualization code
+        grad = attribution.permute(1,2,0).abs().sum(-1)
+        plt.imshow((grad - grad.min()) / (grad.max() - grad.min()), cmap='twilight')
+        plt.title(f"{attributes[i]}: {target_class}", )
+        plt.axis('off')
+    plt.show()
+
+
