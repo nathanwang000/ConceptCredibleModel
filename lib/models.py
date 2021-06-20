@@ -40,13 +40,14 @@ class GT_CUB_Subset_Concept_Model(nn.Module):
     def __init__(self, attributes_names):
         super().__init__()
         self.net = MLP([len(attributes_names), 200]) # logistic regression
+        # self.net = MLP([len(attributes_names), 30, 30, 200]) # doesn't help much
         self.attr_idx = [attribute2idx(a)-1 for a in attributes_names] # 0-index
 
     def forward(self, x):
         # assume x is attributes
         x = x[:, self.attr_idx]
         return self.net(x)
-        
+
 class CCM(nn.Module):
     '''
     concept credible model

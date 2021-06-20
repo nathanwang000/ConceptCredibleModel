@@ -53,25 +53,4 @@ loader_xy_val = DataLoader(SubColumn(cub_val, ['x', 'y']), batch_size=32, shuffl
 loader_xy_te = DataLoader(SubColumn(cub_test, ['x', 'y']), batch_size=32, shuffle=False, num_workers=8)
 
 print(f"# train: {len(cub_train)}, # val: {len(cub_val)}, # test: {len(cub_test)}")
-
-def standard_model(loader_xy, loader_xy_val, loader_xy_te, n_epochs=10, report_every=1, plot=False, device='cuda'):
-    # regular model
-    net = torch.hub.load('pytorch/vision:v0.9.0', 'inception_v3', pretrained=True)
-    net.fc = nn.Linear(2048, 200) # 200 bird classes
-    net.to(device)
-    print('task acc before training: {:.1f}%'.format(test(net, loader_xy_te, acc_criterion, device=device) * 100))
-    
-    # train
-    opt = optim.SGD(net.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0004)
-    log = train(net, loader_xy, opt, n_epochs=n_epochs, report_every=report_every,
-                device=device, savepath=f"{RootPath}/models/standard",
-                report_dict={'val acc': (lambda m: test(m, loader_xy_val, acc_criterion, device=device) * 100, 'max'),
-                             'train acc': (lambda m: test(m, loader_xy, acc_criterion, device=device) * 100, 'max')},
-                early_stop_metric='val acc')
-    if plot: plot_log(log)
-    print('task acc after training: {:.1f}%'.format(test(net, loader_xy_te, acc_criterion, device=device) * 100))        
-    return net
-
-standard_net = standard_model(loader_xy, loader_xy_val, loader_xy_te, n_epochs=100, report_every=1)
-
-    
+print('task acc after training: {:.1f}%'.format(test(torch.load(f'{RootPath}/models/standard.pt'), loader_xy_te, acc_criterion, device='cuda') * 100))        

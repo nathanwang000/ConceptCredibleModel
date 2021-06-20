@@ -15,7 +15,6 @@ def dfs_freeze(model):
             param.requires_grad = False
         dfs_freeze(child)
                                             
-
 ##### CUB specific utilities
 def birdfile2class(filename):
     return int(filename.split("/")[-2][:3])

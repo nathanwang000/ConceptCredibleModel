@@ -1,0 +1,39 @@
+* check average precision as measure makes sense
+
+AP can be trivially high as I reduce the dimensionality of unknown channels.
+
+#+BEGIN_SRC python :results output
+import numpy as np
+import sklearn.metrics as m
+d_known = 312
+for d_unknown in [1, 10, 100, 1000]:
+    res = m.average_precision_score([0]*d_unknown + [1]*d_known, 
+                                    [d_known+d_unknown]*d_unknown + list(range(d_known)))
+    print(f"{d_unknown}: {res}", )
+#+END_SRC
+
+#+RESULTS:
+: 1: 0.9829326427919141
+: 10: 0.8902451619299557
+: 100: 0.5474119878495614
+: 1000: 0.13001979806276584
+
+This shows that one can maximize AP by simply reduce the dimension of the
+unknown channel. This problem is relevant because we would want to sparsely use
+unknown concepts by optimizing for AP. Despite the unknown are ranked higher
+than known concepts, AP will stay high.
+
+Another way to trick AP is to distribute unknown concepts among many
+dimensions. Now each dimension would have little influence on the output, thus
+achieving high AP. 
+
+** Remedy?
+   
+  We need to restrict the form of unknown concepts so that it cannot
+  a) trivially depends on 1 concept (by packing multiple concepts to it)
+  b) diffuse impact among dimensions
+   
+  Another solution is just to normalize the input so that impact of other
+  features are comparable: e.g. x / var(x) * var(x) before calculating feature
+  importance
+

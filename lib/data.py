@@ -6,10 +6,12 @@ from PIL import Image
 from torchvision import transforms
 import os
 import pathlib
+import tqdm
 from torchvision.transforms import GaussianBlur, CenterCrop, ColorJitter, Grayscale, RandomCrop, RandomHorizontalFlip
 
 # custom
-from lib.utils import birdfile2class, attribute2idx, get_class_attributes
+from lib.utils import birdfile2class, attribute2idx, get_class_attributes, get_image_attributes, get_attribute_name
+from lib.eval import get_output
 #, birdfile2idx, is_test_bird_idx, get_bird_bbox, get_bird_class, get_bird_part, get_part_location, get_multi_part_location, get_bird_name
 #  from lib.utils import get_attribute_name, code2certainty, get_class_attributes, get_image_attributes
 
@@ -46,7 +48,40 @@ class TransformWrapper(Dataset):
         d = self.dataset[idx]
         d['x'] = self.transform(d['x'])
         return d
-    
+
+class LearnedAttrWrapper(Dataset):
+    '''
+    precompute learned attributes from attribute_model_names
+    '''
+
+    def __init__(self, dataset, attribute_model_names, bs=32, num_workers=8):
+        self.dataset = dataset
+        model_names = list(map(lambda name: ".".join(name.split(".")[:-1]) \
+                               if len(name.split(".")) > 1 else name,
+                               attribute_model_names))
+        # precompute if model output not saved
+        learned_attrs = []
+        for name in tqdm.tqdm(model_names, desc="loading learned attributes"):
+            if not os.path.exists(name + ".out"):
+                net = torch.load(name + ".pt")
+                loader = DataLoader(dataset, batch_size=bs, shuffle=False,
+                                    num_workers=num_workers)
+                o = get_output(net, loader) # np array output (n, c)
+                torch.save(o, name+".out")
+            else:
+                o = torch.load(name+".out")
+
+            learned_attrs.append(o.reshape(len(o), -1))
+        self.learned_attrs = torch.from_numpy(np.hstack(learned_attrs)).float()
+                
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        d = self.dataset[idx]
+        d['attrs_learned'] = self.learned_attrs[idx]
+        return d
+        
 ########### CUB specific
 class SubAttr(Dataset):
     '''
@@ -84,7 +119,6 @@ def CUB_train_transform(dataset):
 def CUB_test_transform(dataset):
     '''
     transform dataset according to the CBM paper
-    todo: check the exact paper setting
     '''
     resol = 299
     transform = transforms.Compose([
@@ -136,7 +170,11 @@ class CUB(Dataset):
     Caltech UCSD bird dataset http://www.vision.caltech.edu/visipedia/papers/CUB_200_2011.pdf
     '''
 
-    def __init__(self):
+    def __init__(self, class_attr=True):
+        '''
+        class_attr: if True use class level attributes, else use image level attributes
+        '''
+        self.class_attr = class_attr
         # ignore grayscale images (computed from birds_gray.ipynb)
         gray_ims = ['Clark_Nutcracker_0020_85099.jpg',
                     'Pelagic_Cormorant_0022_23802.jpg',
@@ -159,6 +197,17 @@ class CUB(Dataset):
         class_attributes = get_class_attributes() >= 50
         self.class_attributes = torch.from_numpy(np.array(class_attributes)).float()
 
+        # individual attributes
+        if not os.path.exists(f"{pwd}/../datasets/bird_data/attributes.pkl"):
+            print("reading image level attributes (~30s)")
+            image_attributes = get_image_attributes() # 30s
+            pivot_image_attributes = image_attributes.replace({"attr_idx": dict((i, get_attribute_name(i)) for i in range(1, 313))}).pivot(index='image_idx', columns='attr_idx')
+            torch.save(pivot_image_attributes, f"{pwd}/../datasets/bird_data/attributes.pkl")
+        else:
+            pivot_image_attributes = torch.load(f"{pwd}/../datasets/bird_data/attributes.pkl")
+        self.image_attributes = torch.from_numpy(np.array(pivot_image_attributes['is_present'].\
+            loc[:, [get_attribute_name(i) for i in range(1, 313)]].\
+            loc[list(range(1, len(pivot_image_attributes) + 1))])).float()
         
     def __len__(self):
         return len(self.images_path)
@@ -174,8 +223,12 @@ class CUB(Dataset):
         #         transforms.Normalize(mean=[0.485, 0.456, 0.406],
         #                              std=[0.229, 0.224, 0.225]),
         #     ])
-        x, y = x, self.labels[idx]        
-        
+        x, y = x, self.labels[idx]
+        if self.class_attr:
+            attr = self.class_attributes[y]
+        else:
+            attr = self.image_attributes[idx]
         return {"x": x, "y": y, "filename": filename,
-                "attr": self.class_attributes[y]}
+                "attr": attr}
 
+    

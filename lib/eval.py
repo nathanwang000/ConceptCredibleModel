@@ -15,10 +15,15 @@ from joblib import Parallel, delayed
 from lib.models import CCM
 from lib.utils import attribute2idx
 
-def get_output(net, loader_x):
+def get_output(net, loader):
+    net.eval()
     o = []
-    for x, in loader_x:
-        o.extend(net(x).detach().numpy())
+    for d in loader:
+        if type(d) is dict: x = d['x']
+        else: x = d[0]
+        device = net.parameters().__next__().device
+        x = x.to(device)
+        o.extend(net(x).cpu().detach().numpy())
     return np.vstack(o) # (n, c)
 
 def bootstrap(metric, y, y_hat, l=2.5, h=97.5, n=100, n_jobs=4):
@@ -53,14 +58,17 @@ def test(net, loader, criterion, device='cpu'):
     net.train()
     return sum(losses) / total
 
-def plot_log(log, key="loss"):
+def plot_log(log, key="loss", semi_y=False):
     '''log is train log [{epoch: xxx, loss: xxx}]'''
     x = [item['epoch'] for item in log]
     y = [item[key] for item in log]
-    plt.semilogy(x, y)
+    if semi_y:
+        plt.semilogy(x, y, label=key)
+    else:
+        plt.plot(x, y, label=key)
     plt.xlabel('epochs', fontsize=15)
     plt.ylabel(key, fontsize=15)
-    plt.plot()    
+
 
 def shap_net_x(net, shap_x, bs, instance_idx=None, output_idx=None, decimal=2, output_name="hat Y"):
     '''
@@ -230,21 +238,22 @@ def show_attribution(dataset, models, attributes, idx, explain_method=VanillaBac
     '''
     show feature attribution of models to input
     '''
+    n_row = math.ceil(float(len(attributes)+1) / n_col)
     im, y, attr = dataset[idx]['x'].permute(1,2,0), dataset[idx]['y'], dataset[idx]['attr']
     print('0-indexed class id (describe bird is 1-indexed):', y)
-    plt.figure(figsize=(18,6))
-    plt.subplot(math.ceil(float(len(models)+1) / n_col), n_col, 1)
+    plt.figure(figsize=(4 * n_col, n_row * 3))
+    plt.subplot(n_row, n_col, 1)
     plt.imshow((im - im.min()) / (im.max() - im.min()))
     plt.axis('off')
 
-    for i in range(len(models)):
-        explain = explain_method(models[i]) # IntegratedGradients(models[i])
+    for i, m in enumerate(models):
+        explain = explain_method(m) # IntegratedGradients(m)
         # Generate attribution
         target_class = int(attr[attribute2idx(attributes[i]) - 1].item())
         attribution = explain.explain(dataset[idx]['x'].unsqueeze(0).to(device),
                                       target_class)
 
-        plt.subplot(math.ceil(float(len(models)+1) / n_col), n_col, i+2)
+        plt.subplot(n_row, n_col, i+2)
         # save as convert2grayscale image in the online visualization code
         grad = attribution.permute(1,2,0).abs().sum(-1)
         plt.imshow((grad - grad.min()) / (grad.max() - grad.min()), cmap='twilight')
