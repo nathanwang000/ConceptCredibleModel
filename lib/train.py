@@ -12,12 +12,6 @@ def train_step_standard(net, loader, opt, criterion, device='cpu'):
         x, y = x.to(device), y.to(device)
         opt.zero_grad()
         o = net(x)
-        try:
-            o.shape
-        except Exception as e:
-            # for inception module
-            o = o[0]
-            
         l = criterion(o, y).mean()
         l.backward()
         opt.step()
@@ -42,7 +36,7 @@ def train_step_xyz(net, loader, opt, criterion, device='cpu'):
 def train(net, loader, opt, train_step=train_step_standard, 
           criterion=F.cross_entropy, n_epochs=10, report_every=1,
           device="cpu", savepath=None, report_dict={},
-          early_stop_metric=None, patience=10):
+          early_stop_metric=None, patience=20, scheduler=None):
     '''
     report dict take the form: {"func_name": (f, mode)} where f takes net as input, mode is "max" or "min"
     an example is {"val_loss": lambda net: get_loss(net, val_loader)}
@@ -59,7 +53,10 @@ def train(net, loader, opt, train_step=train_step_standard,
         
         _losses = train_step(net, loader, opt, criterion, device=device)
         losses.extend(_losses)
-        
+
+        if scheduler:
+            scheduler.step()
+            
         train_report = {"loss": np.mean(losses[-len(loader):])}
         train_report.update(dict((name, f(net)) for name, \
                                  (f, es_mode) in report_dict.items()))

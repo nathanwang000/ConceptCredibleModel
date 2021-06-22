@@ -100,34 +100,74 @@ class SubAttr(Dataset):
         d['attr'] = d['attr'][self.attr_idx].long()
         return d
 
-def CUB_train_transform(dataset):
+def CUB_train_transform(dataset, mode="cbm"):
     '''
     transform dataset according to the CBM paper
+    mode: cbm or custom
     '''
     resol = 299
-    transform = transforms.Compose([
-        transforms.ColorJitter(brightness=32/255, saturation=(0.5, 1.5)),
-        transforms.RandomResizedCrop(resol),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(), #implicitly divides by 255
-        transforms.Normalize(mean = [0.5, 0.5, 0.5], std = [2, 2, 2])
-        # transforms.Normalize(mean = [ 0.485, 0.456, 0.406 ], std = [ 0.229, 0.224, 0.225 ]), # imagenet setting
-    ])
-
+    if mode == "cbm":
+        transform = transforms.Compose([
+            transforms.ColorJitter(brightness=32/255, saturation=(0.5, 1.5)),
+            transforms.RandomResizedCrop(resol),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(), #implicitly divides by 255
+            transforms.Normalize(mean = [0.5, 0.5, 0.5], std = [2, 2, 2])
+        ])
+    elif mode == 'imagenet': # same train test but use imagenet trainsform 77.9% acc
+        transform = transforms.Compose([ # for imagenet
+                transforms.Resize(299), # this only resize the smaller size
+                transforms.CenterCrop(299),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225]),
+            ])
+    elif mode == 'same': # 77.7% acc; only center crop is ok
+        transform = transforms.Compose([
+            transforms.CenterCrop(299), # this makes sure it is centered
+            transforms.ToTensor(),
+            transforms.Normalize(mean = [0.5, 0.5, 0.5], std = [2, 2, 2])
+            ])
+    elif mode == 'flip':
+        transform = transforms.Compose([
+            # transforms.ColorJitter(brightness=32/255, saturation=(0.5, 1.5)),
+            # transforms.RandomResizedCrop(resol),
+            transforms.CenterCrop(299), # this makes sure it is centered
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(), #implicitly divides by 255
+            transforms.Normalize(mean = [0.5, 0.5, 0.5], std = [2, 2, 2])
+        ])
+    elif mode == 'crop':
+        transform = transforms.Compose([
+            # transforms.ColorJitter(brightness=32/255, saturation=(0.5, 1.5)),
+            transforms.RandomResizedCrop(resol),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(), #implicitly divides by 255
+            transforms.Normalize(mean = [0.5, 0.5, 0.5], std = [2, 2, 2])
+        ])
+    
     return TransformWrapper(dataset, transform)
 
-def CUB_test_transform(dataset):
+def CUB_test_transform(dataset, mode="cbm"):
     '''
     transform dataset according to the CBM paper
     '''
-    resol = 299
-    transform = transforms.Compose([
-        transforms.CenterCrop(resol),
-        transforms.ToTensor(), #implicitly divides by 255
-        transforms.Normalize(mean = [0.5, 0.5, 0.5], std = [2, 2, 2])
-        #transforms.Normalize(mean = [ 0.485, 0.456, 0.406 ], std = [ 0.229, 0.224, 0.225 ]),
-    ])
+    if mode == 'imagenet':
+        transform = transforms.Compose([ # for imagenet
+            transforms.Resize(299), # this only trims the smaller side
+            transforms.CenterCrop(299), # this makes sure it is centered
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                 std=[0.229, 0.224, 0.225]),
+            ])
+    else:
+        transform = transforms.Compose([
+            transforms.CenterCrop(299), # this makes sure it is centered
+            transforms.ToTensor(), # implicitly divides by 255
+            transforms.Normalize(mean = [0.5, 0.5, 0.5], std = [2, 2, 2])
+            ])
         
+     
     return TransformWrapper(dataset, transform)
 
 class small_CUB(Dataset):
@@ -216,13 +256,6 @@ class CUB(Dataset):
         # based on example here: https://pytorch.org/hub/pytorch_vision_inception_v3/
         filename = self.images_path[idx]
         x = Image.open(filename)
-        # preprocess = transforms.Compose([ # for imagenet
-        #         transforms.Resize(299),
-        #         transforms.CenterCrop(299),
-        #         transforms.ToTensor(),
-        #         transforms.Normalize(mean=[0.485, 0.456, 0.406],
-        #                              std=[0.229, 0.224, 0.225]),
-        #     ])
         x, y = x, self.labels[idx]
         if self.class_attr:
             attr = self.class_attributes[y]

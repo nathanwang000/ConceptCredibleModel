@@ -34,7 +34,7 @@ from lib.utils import birdfile2class, birdfile2idx, is_test_bird_idx, get_bird_b
 from lib.utils import get_attribute_name, code2certainty, get_class_attributes, get_image_attributes, describe_bird, attribute2idx
 
 
-class_attr = True
+class_attr = True # use class level attributes
 cub = CUB(class_attr)
 
 train_val_indices = [i for i in range(len(cub)) if not is_test_bird_idx(birdfile2idx(cub.images_path[i]))]
@@ -49,68 +49,50 @@ cub_test = CUB_test_transform(Subset(cub, test_indices))
 # accuracy
 acc_criterion = lambda o, y: (o.argmax(1) == y).float()
 
-ind_maj_attr = [
-  'has_back_color::white',
-  'has_shape::perching-like',
-  'has_back_color::buff',
-  'has_back_color::black',
-  'has_underparts_color::yellow',
-  'has_crown_color::grey',
-  'has_underparts_color::brown',
-  'has_back_pattern::solid',
-  'has_underparts_color::buff',
-  'has_breast_color::grey',
-  'has_bill_length::about_the_same_as_head',
-  'has_back_color::brown',
-  'has_belly_pattern::solid',
-  'has_belly_color::white',
-  'has_wing_color::grey',
-  'has_forehead_color::blue',
-  'has_leg_color::black',
-  'has_head_pattern::capped',
-  'has_forehead_color::red',
-  'has_tail_pattern::multi-colored',
-  'has_upperparts_color::yellow',
-  'has_eye_color::black',
-  'has_underparts_color::black',
-  'has_bill_color::grey',
-  'has_size::very_small_(3_-_5_in)',
-  'has_leg_color::grey',
-  'has_back_pattern::multi-colored',
-  'has_breast_pattern::multi-colored',
-  'has_crown_color::white',
-  'has_tail_shape::notched_tail'
-]
-
+# define concepts to learn
 class_attributes = get_class_attributes()
-maj_concepts = class_attributes.loc[:, ((class_attributes >= 50).sum(0) >= 10)] >= 50 # CBM paper report 112 concepts
-ind_maj_attr = set(maj_concepts.columns) - set(ind_maj_attr)
+maj_concepts = class_attributes.loc[:, ((class_attributes >= 50).sum(0) >= 10)] >= 50 # CBM paper report 112 concepts; here is 108
+ind_maj_attr = set(maj_concepts.columns) 
 print(f'ind_maj_attr has {len(ind_maj_attr)} concepts to learn')
 
-def concept_model(name, loader_xy, loader_xy_val, loader_xy_te, n_epochs=10, report_every=1, plot=False, device='cuda'):
+def concept_model(name, loader_xy, loader_xy_val, loader_xy_te, n_epochs=10,
+                  report_every=1, plot=False, device='cuda'):
     # regular model
     net = torch.hub.load('pytorch/vision:v0.9.0', 'inception_v3', pretrained=True)
     net.fc = nn.Linear(2048, 2) # concept binary model
     net.to(device)
-    print('task acc before training: {:.1f}%'.format(test(net, loader_xy, acc_criterion, device=device) * 100))
+    print('task acc before training: {:.1f}%'.format(test(net,
+                                                          loader_xy, acc_criterion,
+                                                          device=device) * 100))
     
     # train
-    opt = optim.Adam(net.parameters()) # optim.SGD(net.parameters(), lr=0.01, momentum=0.9)
+    # opt = optim.SGD(net.parameters(), lr=0.01, momentum=0.9)
+    opt = optim.Adam(net.parameters())
     log = train(net, loader_xy, opt, n_epochs=n_epochs, report_every=report_every,
                 device=device, savepath=f"{RootPath}/models/{name}",
-                report_dict={'val acc': (lambda m: test(m, loader_xy_val, acc_criterion, device=device) * 100, 'max'),
-                             'train acc': (lambda m: test(m, loader_xy, acc_criterion, device=device) * 100, 'max'),
-                             'test acc': (lambda m: test(m, loader_xy_te, acc_criterion, device=device) * 100, 'max')},
+                report_dict={'val acc': (lambda m: test(m, loader_xy_val, acc_criterion,
+                                                        device=device) * 100, 'max'),
+                             'train acc': (lambda m: test(m, loader_xy, acc_criterion,
+                                                          device=device) * 100, 'max'),
+                             'test acc': (lambda m: test(m, loader_xy_te, acc_criterion,
+                                                         device=device) * 100, 'max')},
                 early_stop_metric='val acc')
     
     if plot: plot_log(log)
-    print('task acc after training: {:.1f}%'.format(test(net, loader_xy_te, acc_criterion, device=device) * 100))
+    print('task acc after training: {:.1f}%'.format(test(net, loader_xy_te,
+                                                         acc_criterion,
+                                                         device=device) * 100))
     return net
 
+# todo: learn a single model instead
 models = []
 for attr in ind_maj_attr:
     print(attr)
-    loader_xy_ = DataLoader(SubColumn(SubAttr(cub_train, attr), ['x', 'attr']), batch_size=32, shuffle=True, num_workers=8)
-    loader_xy_val_ = DataLoader(SubColumn(SubAttr(cub_val, attr), ['x', 'attr']), batch_size=32, shuffle=False, num_workers=8)    
-    loader_xy_te_ = DataLoader(SubColumn(SubAttr(cub_test, attr), ['x', 'attr']), batch_size=32, shuffle=False, num_workers=8)
-    concept_model(f"attr_{int(class_attr)}_{attr}", loader_xy_, loader_xy_val_, loader_xy_te_, n_epochs=10, report_every=1)
+    loader_xy_ = DataLoader(SubColumn(SubAttr(cub_train, attr), ['x', 'attr']),
+                            batch_size=32, shuffle=True, num_workers=8)
+    loader_xy_val_ = DataLoader(SubColumn(SubAttr(cub_val, attr), ['x', 'attr']),
+                                batch_size=32, shuffle=False, num_workers=8)    
+    loader_xy_te_ = DataLoader(SubColumn(SubAttr(cub_test, attr), ['x', 'attr']),
+                               batch_size=32, shuffle=False, num_workers=8)
+    concept_model(f"attr_{int(class_attr)}_{attr}", loader_xy_, loader_xy_val_,
+                  loader_xy_te_, n_epochs=10, report_every=1)
