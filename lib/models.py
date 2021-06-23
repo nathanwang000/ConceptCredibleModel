@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 import types
 
@@ -32,6 +33,14 @@ class LambdaNet(nn.Module):
     def forward(self, *args):
         return self.lambd(*args)
 
+class ConcatNet(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.dim = dim
+
+    def forward(self, args):
+        return torch.cat(args, dim=self.dim)
+        
 ######### specific models
 class GT_CUB_Subset_Concept_Model(nn.Module):
     '''
@@ -52,18 +61,26 @@ class CCM(nn.Module):
     '''
     concept credible model
     '''
-    def __init__(self, net_c, net_not_c, net_y):
+    def __init__(self, net_c, net_not_c, net_y, c_no_grad=True):
         '''
         f(x) = net_y(net_c(x), net_not_c(x))
         net_c and net_not_c output (n, d_*)
+        c_no_grad: known concept model don't need gradient (save gpu memory)
         '''
         super().__init__()
         self.net_c = net_c
         self.net_not_c = net_not_c
         self.net_y = net_y
+        self.c_no_grad = c_no_grad
         
     def forward(self, x):
-        return self.net_y(self.net_c(x), self.net_not_c(x))
+        if self.c_no_grad:
+            with torch.no_grad():
+                self.net_c.eval()
+                c = self.net_c(x)
+            return self.net_y([c, self.net_not_c(x)])
+        else:
+            return self.net_y([self.net_c(x), self.net_not_c(x)])
     
 class CBM(nn.Module):
     '''

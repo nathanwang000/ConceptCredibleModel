@@ -15,13 +15,18 @@ from joblib import Parallel, delayed
 from lib.models import CCM
 from lib.utils import attribute2idx
 
+@torch.no_grad()
 def get_output(net, loader):
     net.eval()
+    try:
+        device = net.parameters().__next__().device
+    except:
+        device = 'cpu'
+    
     o = []
     for d in loader:
         if type(d) is dict: x = d['x']
         else: x = d[0]
-        device = net.parameters().__next__().device
         x = x.to(device)
         o.extend(net(x).cpu().detach().numpy())
     return np.vstack(o) # (n, c)
@@ -137,8 +142,8 @@ def shap_ccm_c(ccm, shap_x, bs, instance_idx=None, output_idx=None, c_name='Z', 
         print(f'Explaining {output_name}{i}')
     
         ccm_concept = lambda x: F.softmax(ccm.net_y(
-            torch.from_numpy(x[:, :c]),
-            torch.from_numpy(x[:, -not_c:])
+            [torch.from_numpy(x[:, :c]),
+            torch.from_numpy(x[:, -not_c:])]
         ), 1).detach()[:, i].numpy()
 
         # shap explanation
