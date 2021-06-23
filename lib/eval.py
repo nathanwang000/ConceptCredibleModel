@@ -44,6 +44,7 @@ def bootstrap(metric, y, y_hat, l=2.5, h=97.5, n=100, n_jobs=4):
     dl, dh = np.percentile(delta, (l, h))
     return s - dh, s - dl
 
+@torch.no_grad()
 def test(net, loader, criterion, device='cpu'):
     net.eval()
     losses = []

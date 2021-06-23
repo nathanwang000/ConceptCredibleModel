@@ -61,11 +61,10 @@ def get_args():
     print(args)
     return args
 
-def standard_model(concept_model_path,
-                   loader_xy, loader_xy_eval, loader_xy_te, loader_xy_val=None,
-                   n_epochs=10, report_every=1, lr_step=1000,
-                   device='cuda', savepath=None, use_aux=False,
-                   ):
+def cbm(concept_model_path,
+        loader_xy, loader_xy_eval, loader_xy_te, loader_xy_val=None,
+        n_epochs=10, report_every=1, lr_step=1000,
+        device='cuda', savepath=None, use_aux=False):
     '''
     loader_xy_eval is the evaluation of loader_xy
     if loader_xy_val: use early stopping, otherwise train for the number of epochs
@@ -172,17 +171,17 @@ if __name__ == '__main__':
                                shuffle=True, num_workers=8)
         loader_xy_eval = DataLoader(SubColumn(cub_train_eval, ['x', 'y']), batch_size=32,
                                     shuffle=True, num_workers=8)
-        standard_net = standard_model(flags.concept_model_path,
-                                      loader_xy, loader_xy_eval,
-                                      loader_xy_te,
-                                      n_epochs=flags.n_epochs, report_every=1,
-                                      lr_step=flags.lr_step,
-                                      savepath=model_name, use_aux=flags.use_aux)
+        net = cbm(flags.concept_model_path,
+                  loader_xy, loader_xy_eval,
+                  loader_xy_te,
+                  n_epochs=flags.n_epochs, report_every=1,
+                  lr_step=flags.lr_step,
+                  savepath=model_name, use_aux=flags.use_aux)
     else:
-        standard_net = standard_model(flags.concept_model_path,
-                                      loader_xy, loader_xy_eval,
-                                      loader_xy_te, loader_xy_val=loader_xy_val,
-                                      n_epochs=flags.n_epochs, report_every=1,
-                                      lr_step=flags.lr_step,
-                                      savepath=model_name, use_aux=flags.use_aux)
+        net = cbm(flags.concept_model_path,
+                  loader_xy, loader_xy_eval,
+                  loader_xy_te, loader_xy_val=loader_xy_val,
+                  n_epochs=flags.n_epochs, report_every=1,
+                  lr_step=flags.lr_step,
+                  savepath=model_name, use_aux=flags.use_aux)
         
