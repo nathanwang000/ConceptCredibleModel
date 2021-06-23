@@ -36,14 +36,15 @@ def train_step_xyz(net, loader, opt, criterion, device='cpu'):
 def train(net, loader, opt, train_step=train_step_standard, 
           criterion=F.cross_entropy, n_epochs=10, report_every=1,
           device="cpu", savepath=None, report_dict={},
-          early_stop_metric=None, patience=20, scheduler=None):
+          early_stop_metric=None, patience=20, scheduler=None,
+          train_mode=True):
     '''
     report dict take the form: {"func_name": (f, mode)} where f takes net as input, mode is "max" or "min"
     an example is {"val_loss": lambda net: get_loss(net, val_loader)}
     
     es_metric: early stopping metric (string in report_dict)
     '''
-    net.train()
+    if train_mode: net.train()
     train_log, losses = [], []
     if early_stop_metric in report_dict:
         f, es_mode = report_dict[early_stop_metric]

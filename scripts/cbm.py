@@ -1,5 +1,5 @@
 '''
-this file trains a standard model
+this files trains an sequential CBM
 '''
 import sys, os
 import tqdm
@@ -53,38 +53,39 @@ def get_args():
                         help="max number of epochs to train")
     parser.add_argument("--use_aux", action="store_true",
                         help="auxilliary loss for inception")
+    parser.add_argument("--concept_model_path", type=str,
+                        default="gold_models/concepts_flip",
+                        help="concept model path starting from root (ignore .pt)")
     
     args = parser.parse_args()
     print(args)
     return args
 
-def standard_model(loader_xy, loader_xy_eval, loader_xy_te, loader_xy_val=None,
+def standard_model(concept_model_path,
+                   loader_xy, loader_xy_eval, loader_xy_te, loader_xy_val=None,
                    n_epochs=10, report_every=1, lr_step=1000,
-                   device='cuda', savepath=None, use_aux=False):
+                   device='cuda', savepath=None, use_aux=False,
+                   ):
     '''
     loader_xy_eval is the evaluation of loader_xy
     if loader_xy_val: use early stopping, otherwise train for the number of epochs
     '''
     # regular model
-    net = torch.hub.load('pytorch/vision:v0.9.0', 'inception_v3', pretrained=True)
-    net.fc = nn.Linear(2048, 200) # 200 bird classes
-    net.AuxLogits.fc = nn.Linear(768, 200)
+    x2c = torch.load(f'{RootPath}/{concept_model_path}.pt')
+    x2c.aux_logits = False
+    fc = nn.Linear(108, 200) # 200 bird classes
+    net = nn.Sequential(x2c, fc)
     net.to(device)
+    net[0].eval()
+    net[1].train() # only train the linear part
+    
     print('task acc before training: {:.1f}%'.format(test(net, loader_xy_te,
                                                           acc_criterion,
                                                           device=device) * 100))
-
-    if use_aux:
-        # for inception module where o[1] is auxilliary input to avoid vanishing
-        # gradient https://stats.stackexchange.com/questions/274286/google-inception-modelwhy-there-is-multiple-softmax
-        # https://discuss.pytorch.org/t/why-auxiliary-logits-set-to-false-in-train-mode/40705
-        criterion = lambda o, y: F.cross_entropy(o[0], y) + \
-            0.4 * F.cross_entropy(o[1], y)
-    else:
-        criterion = lambda o, y: F.cross_entropy(o[0], y)
+    criterion = lambda o, y: F.cross_entropy(o, y)
     
     # train
-    opt = optim.SGD(net.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0004)
+    opt = optim.SGD(fc.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0004)
     scheduler = lr_scheduler.StepLR(opt, step_size=lr_step)
     if loader_xy_val:
         log = train(net, loader_xy, opt, criterion=criterion,
@@ -98,6 +99,7 @@ def standard_model(loader_xy, loader_xy_eval, loader_xy_te, loader_xy_val=None,
                                                               device=device) * 100,
                                                'max')},
                     early_stop_metric='val acc',
+                    train_mode = False,
                     scheduler=scheduler)
     else:
         log = train(net, loader_xy, opt, criterion=criterion,
@@ -110,6 +112,7 @@ def standard_model(loader_xy, loader_xy_eval, loader_xy_te, loader_xy_val=None,
                                                               acc_criterion,
                                                               device=device) * 100,
                                                'max')},
+                    train_mode = False,
                     scheduler=scheduler)
 
     print('task acc after training: {:.1f}%'.format(test(net, loader_xy_te,
@@ -119,7 +122,7 @@ def standard_model(loader_xy, loader_xy_eval, loader_xy_te, loader_xy_val=None,
 
 if __name__ == '__main__':
     flags = get_args()
-    model_name = f"{RootPath}/models/standard"
+    model_name = f"{RootPath}/models/cbm"
     if flags.retrain:
         model_name += "_retrain"    
     if flags.transform:
@@ -164,18 +167,20 @@ if __name__ == '__main__':
         cub_train = CUB_train_transform(Subset(cub, train_val_indices),
                                         mode=flags.transform)
         cub_train_eval = CUB_test_transform(Subset(cub, train_val_indices),
-                                        mode=flags.transform)
+                                             mode=flags.transform)
         loader_xy = DataLoader(SubColumn(cub_train, ['x', 'y']), batch_size=32,
                                shuffle=True, num_workers=8)
         loader_xy_eval = DataLoader(SubColumn(cub_train_eval, ['x', 'y']), batch_size=32,
                                     shuffle=True, num_workers=8)
-        standard_net = standard_model(loader_xy, loader_xy_eval,
+        standard_net = standard_model(flags.concept_model_path,
+                                      loader_xy, loader_xy_eval,
                                       loader_xy_te,
                                       n_epochs=flags.n_epochs, report_every=1,
                                       lr_step=flags.lr_step,
                                       savepath=model_name, use_aux=flags.use_aux)
     else:
-        standard_net = standard_model(loader_xy, loader_xy_eval,
+        standard_net = standard_model(flags.concept_model_path,
+                                      loader_xy, loader_xy_eval,
                                       loader_xy_te, loader_xy_val=loader_xy_val,
                                       n_epochs=flags.n_epochs, report_every=1,
                                       lr_step=flags.lr_step,

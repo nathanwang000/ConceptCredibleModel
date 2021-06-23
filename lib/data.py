@@ -88,16 +88,20 @@ class SubAttr(Dataset):
     a dataset taking sub attributes
     for learning each concept
     '''
-    def __init__(self, dataset, attr_name):
+    def __init__(self, dataset, attr_names):
         self.dataset = dataset
-        self.attr_idx = attribute2idx(attr_name)-1 # 0-index
+        self.attr_indices = list(map(lambda attr: attribute2idx(attr) - 1,
+                                     attr_names)) # 0 - index
 
     def __len__(self):
         return len(self.dataset)
 
     def __getitem__(self, idx):
         d = self.dataset[idx]
-        d['attr'] = d['attr'][self.attr_idx].long()
+        if len(self.attr_indices) == 1:
+            d['attr'] = d['attr'][self.attr_indices[0]].long()
+        else:
+            d['attr'] = d['attr'][self.attr_indices].long()
         return d
 
 def CUB_train_transform(dataset, mode="cbm"):

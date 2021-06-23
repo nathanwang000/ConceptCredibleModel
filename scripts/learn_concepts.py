@@ -1,3 +1,6 @@
+'''
+this file trains concepts separately
+'''
 import sys, os
 import tqdm
 import numpy as np
@@ -84,7 +87,6 @@ def concept_model(name, loader_xy, loader_xy_val, loader_xy_te, n_epochs=10,
                                                          device=device) * 100))
     return net
 
-# todo: learn a single model instead
 models = []
 for attr in ind_maj_attr:
     print(attr)
