@@ -61,26 +61,36 @@ class CCM(nn.Module):
     '''
     concept credible model
     '''
-    def __init__(self, net_c, net_not_c, net_y, c_no_grad=True):
+    def __init__(self, net_c, net_not_c, net_y, c_no_grad=True, u_no_grad=False):
         '''
         f(x) = net_y(net_c(x), net_not_c(x))
         net_c and net_not_c output (n, d_*)
-        c_no_grad: known concept model don't need gradient (save gpu memory)
+        c_no_grad: known concept model doesn't need gradient (save gpu memory)
+        u_no_grad: unknown concept model doesn't need gradient
         '''
         super().__init__()
         self.net_c = net_c
         self.net_not_c = net_not_c
         self.net_y = net_y
         self.c_no_grad = c_no_grad
+        self.u_no_grad = u_no_grad
         
     def forward(self, x):
         if self.c_no_grad:
             with torch.no_grad():
                 self.net_c.eval()
                 c = self.net_c(x)
-            return self.net_y([c, self.net_not_c(x)])
         else:
-            return self.net_y([self.net_c(x), self.net_not_c(x)])
+            c = self.net_c(x)
+
+        if self.u_no_grad:
+            with torch.no_grad():
+                self.net_not_c.eval()
+                u = self.net_not_c(x)
+        else:
+            u = self.net_not_c(x)
+            
+        return self.net_y([c, u])
     
 class CBM(nn.Module):
     '''
