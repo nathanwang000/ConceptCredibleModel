@@ -40,6 +40,8 @@ from lib.utils import get_attribute_name, code2certainty, get_class_attributes, 
 
 def get_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument("-o", "--outputs_dir", default=f"models",
+                        help="where to save all the outputs")
     parser.add_argument("--eval", action="store_true",
                         help="whether or not to eval the learned model")
     parser.add_argument("--retrain", action="store_true",
@@ -134,7 +136,7 @@ def concept_model(n_attrs, loader_xy, loader_xy_eval, loader_xy_te, loader_xy_va
 
 if __name__ == '__main__':
     flags = get_args()
-    model_name = f"{RootPath}/models/concepts"
+    model_name = f"{RootPath}/{flags.outputs_dir}/concepts"
     if flags.retrain:
         model_name += "_retrain"    
     if flags.transform:
