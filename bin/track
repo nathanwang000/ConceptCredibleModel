@@ -13,11 +13,15 @@ examples:
   # log only the tid entry of the log
   track log [tid]
   # read track log from o_dir
-  track log [tid] -o [o_dir] 
+  track log [tid] -o [o_dir]
+  # same more succinct
+  track log [o_dir/tid] # if conflict with -o, this takes precedence
   # update message for the entry with tid
   track log [tid] -m "updated message"
   # removes tid from the log and its associated output directory
-  track rm [tid] 
+  track rm [tid]
+  # removes tid from a directory
+  track rm [o_dir/tid]
 
 assumes:
   [command] to run takes "--outputs_dir outputs/tid" as argument
@@ -43,19 +47,63 @@ def get_args():
                         help="meassage for this run")
     parser.add_argument("-o", "--outputs_dir", default="outputs",
                         help="where outputs are saved")
+    parser.add_argument("-l", "--report_level", default=1, type=int,
+                        help="max report level")
     args = parser.parse_args()
     return args
+
+def gather_log(o_dir, level=0, max_level=1):
+    '''
+    gather a list of records
+
+    max_level: show how many level of logs
+    level: current level
+    '''
+    assert level >= 0 and max_level >= 0, "only non-negtive number of levels"
+    records = []
+    if level == max_level: return records
+    for tid in os.listdir(o_dir):
+        track_log = f"{o_dir}/{tid}/track.log"
+        if not os.path.exists(track_log): continue
+            
+        record = torch.load(track_log)
+        record['children'] = gather_log(os.path.join(o_dir, tid), level+1, max_level)
+        records.append(record)
+    return records
+
+def gen_report(records, level=0):
+    all_report = ""
+    for i, record in enumerate(sorted(records, key=lambda r: r['date'])[::-1]):
+        report = f'''
+        command: {record['command']}
+        date:    {record['date']:%Y-%m-%d %H:%M}
+        desc:    {record['desc']}
+        tid:     {record['tid']}
+        git:     {record['git']}
+        '''
+        report = '\n'.join(((" " * 8 * level) + l.strip() \
+                              for l in report.split('\n')[1:]))
+        if i != 0 or level != 0:
+            all_report += '\n'
+        all_report += report
+        all_report += gen_report(record['children'], level+1)
+        
+    return all_report
 
 if __name__ == "__main__":
     flags = get_args()
  
-    if flags.command[0] == "rm":
+    if flags.command[0] == "rm": 
         '''
         removes the experiment and its associated output directory
         '''
         assert len(flags.command) == 2, "track rm expect a experiment id"
         tid = flags.command[1]
-        rm_dir = f"{flags.outputs_dir}/{tid}"
+        o_dir = flags.outputs_dir
+        if "/" in tid:
+            o_dir = os.path.dirname(tid)
+            tid = tid.split("/")[-1]
+        rm_dir = f"{o_dir}/{tid}"
         os.system(f"rm -r {rm_dir}")
         
     elif flags.command[0] == "log":
@@ -65,29 +113,28 @@ if __name__ == "__main__":
         '''
         assert len(flags.command) <= 2, "track log expect <= 2 arguments"
 
-        for tid in sorted(os.listdir(flags.outputs_dir))[::-1]:
-            track_log = f"{flags.outputs_dir}/{tid}/track.log"
-            if not os.path.exists(track_log): continue
-            if len(flags.command) == 2 and flags.command[1] != tid:
-                continue
-            
+        reports = []
+        o_dir = flags.outputs_dir
+        if len(flags.command) == 2 and '/' in flags.command[1]:
+            o_dir = os.path.dirname(flags.command[1])
+
+        if len(flags.command) == 2 and flags.command[1].split('/')[-1] != "":
+            # show specific tid            
+            tid = flags.command[1].split('/')[-1]
+            track_log = f"{o_dir}/{tid}/track.log"            
             record = torch.load(track_log)
 
             # update message
-            if len(flags.command) == 2 and flags.message != "":
+            if flags.message != "":
                 record['desc'] = flags.message
                 torch.save(record, track_log)
 
-            # report log
-            report = f'''
-            command: {record['command']}
-            date:    {record['date']:%Y-%m-%d %H:%M}
-            desc:    {record['desc']}
-            tid:     {record['tid']}
-            git:     {record['git']}
-            '''
-            report = '\n'.join((l.strip() for l in report.split('\n')))[1:]
-            print(report)
+            record['children'] = gather_log(f"{o_dir}/{tid}",
+                                            max_level=flags.report_level)
+            print(gen_report([record]))
+        else:
+            records = gather_log(o_dir, max_level=flags.report_level)
+            print(gen_report(records))
 
     else: # run the command
         # give a unique identifier directory
