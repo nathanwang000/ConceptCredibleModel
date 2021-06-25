@@ -1,0 +1,114 @@
+#!/usr/bin/python3
+help_message = '''
+goal: track ML experiment
+
+It generates a unique tracking number tid, and saves all output in args.outputs_dir/tid
+All the tracking information are recorded in args.outputs_dir/tid
+
+examples:
+  # run command with some message
+  track [command] -m "some message"
+  # analogous to git log (to really mimic it run "track log | less")
+  track log 
+  # log only the tid entry of the log
+  track log [tid]
+  # read track log from o_dir
+  track log [tid] -o [o_dir] 
+  # update message for the entry with tid
+  track log [tid] -m "updated message"
+  # removes tid from the log and its associated output directory
+  track rm [tid] 
+
+assumes:
+  [command] to run takes "--outputs_dir outputs/tid" as argument
+'''
+import argparse
+from argparse import RawTextHelpFormatter
+import uuid
+import sys
+import os
+import subprocess
+import datetime
+import torch
+
+def get_args():
+    '''
+    commandline arguments for the task
+    '''
+    parser = argparse.ArgumentParser(description=help_message,
+                                     formatter_class=RawTextHelpFormatter)
+    parser.add_argument("command", nargs='+',
+                        help="command to run")
+    parser.add_argument("-m", "--message", default="",
+                        help="meassage for this run")
+    parser.add_argument("-o", "--outputs_dir", default="outputs",
+                        help="where outputs are saved")
+    args = parser.parse_args()
+    return args
+
+if __name__ == "__main__":
+    flags = get_args()
+ 
+    if flags.command[0] == "rm":
+        '''
+        removes the experiment and its associated output directory
+        '''
+        assert len(flags.command) == 2, "track rm expect a experiment id"
+        tid = flags.command[1]
+        rm_dir = f"{flags.outputs_dir}/{tid}"
+        os.system(f"rm -r {rm_dir}")
+        
+    elif flags.command[0] == "log":
+        '''
+        if given tid, will look at that particular log entry
+        otherwise display outputs_dir's subdirectories' track log
+        '''
+        assert len(flags.command) <= 2, "track log expect <= 2 arguments"
+
+        for tid in sorted(os.listdir(flags.outputs_dir))[::-1]:
+            track_log = f"{flags.outputs_dir}/{tid}/track.log"
+            if not os.path.exists(track_log): continue
+            if len(flags.command) == 2 and flags.command[1] != tid:
+                continue
+            
+            record = torch.load(track_log)
+
+            # update message
+            if len(flags.command) == 2 and flags.message != "":
+                record['desc'] = flags.message
+                torch.save(record, track_log)
+
+            # report log
+            report = f'''
+            command: {record['command']}
+            date:    {record['date']:%Y-%m-%d %H:%M}
+            desc:    {record['desc']}
+            tid:     {record['tid']}
+            git:     {record['git']}
+            '''
+            report = '\n'.join((l.strip() for l in report.split('\n')))[1:]
+            print(report)
+
+    else: # run the command
+        # give a unique identifier directory
+        tid = uuid.uuid1().hex
+        o_dir = f"{flags.outputs_dir}/{tid}"
+        os.system(f"mkdir -p {o_dir}")
+
+        record = {'date': datetime.datetime.now(),
+                  'git': subprocess.check_output(["git", "rev-parse",
+                                                   "HEAD"]).strip().decode("utf-8"),
+                  'tid': tid, # track id
+                  'command': " ".join(flags.command),
+                  'desc': flags.message
+        }
+        track_log = f"{flags.outputs_dir}/{tid}/track.log"        
+        torch.save(record, track_log)
+        
+        # do the actual job
+        command = " ".join(flags.command + [f'--outputs_dir {o_dir}'])
+        print(command)
+        os.system(command)
+
+
+    

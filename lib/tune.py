@@ -23,7 +23,7 @@ class GPU_manager():
     def rm_job(self, gpu_id):
         self.gpu_jobs[gpu_id] -= 1
 
-def create_command(filename, option_list):
+def create_command(filename, option_list, track=True, o_dir=None):
     '''
     example: python filename k1 v1 k2
     INPUTS:
@@ -32,6 +32,8 @@ def create_command(filename, option_list):
                      or just a key (to handle "store_const" type of argument);
                      e.g., option_list = [(k1, v1), k2]
         option_dict: (k,v) pairs to handle "python filename --key value" where 
+        track: whether to track the file using lib/track
+        o_dir: output dir for track
     RETURNS:
         command: ['python', filename, str(k1), str(v1), str(k2)]
     '''
@@ -45,9 +47,16 @@ def create_command(filename, option_list):
             command.append(item)
         else:
             raise Exception('unrecognized type, args can only be (k,v) or str')
+
+    if track:
+        assert o_dir, "outputs_dir or o_dir cannot be empty"
+        FilePath = os.path.dirname(os.path.abspath(__file__))
+        RootPath = os.path.dirname(FilePath) # assumes this file is in lib
+        command = [f'{RootPath}/bin/track'] + [" ".join(command)] + ['-o', o_dir]
+        
     return command
     
-def run(filename, tasks, gpus, n_concurrent_process):
+def run(filename, tasks, gpus, n_concurrent_process, track=True, o_dir=None):
     '''
     python filename k1 v1 k2
     INPUTS:
@@ -55,15 +64,21 @@ def run(filename, tasks, gpus, n_concurrent_process):
         tasks: list of option_list where option_list is a list of (k,v) pairs or just k
         gpus: list of gpus to use for the tasks; if empty uses cpu
         n_concurrent_process: number of jobs to run in parallel
+        track: whether to track the file using bin/track
+        o_dir: outputs_dir
     RETURNS:
         None; runs the requested jobs in parallel
     '''
+    if track:
+        assert o_dir, "outputs_dir or o_dir cannot be empty"
+    
     procs = []
     gpu_manager = GPU_manager(gpus)
 
     commands = []
     for task in tasks:
-        commands.append(create_command(filename, task))
+        commands.append(create_command(filename, task, track=track,
+                                       o_dir=o_dir))
 
     for command in commands:
         print(command)

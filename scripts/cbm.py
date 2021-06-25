@@ -47,7 +47,7 @@ def get_args():
                         help="retrain using all train val data")
     parser.add_argument("--seed", type=int, default=42,
                         help="seed for reproducibility")
-    parser.add_argument("--transform", default="imagenet",
+    parser.add_argument("--transform", default="cbm",
                         help="transform mode to use")
     parser.add_argument("--lr_step", type=int, default=1000,
                         help="learning rate decay steps")
@@ -124,10 +124,6 @@ def cbm(concept_model_path,
 if __name__ == '__main__':
     flags = get_args()
     model_name = f"{RootPath}/{flags.outputs_dir}/cbm"
-    if flags.retrain:
-        model_name += "_retrain"    
-    if flags.transform:
-        model_name += "_" + flags.transform
     print(model_name)
 
     cub = CUB()
