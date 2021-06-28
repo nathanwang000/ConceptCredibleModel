@@ -10,10 +10,8 @@ import tqdm
 from torchvision.transforms import GaussianBlur, CenterCrop, ColorJitter, Grayscale, RandomCrop, RandomHorizontalFlip
 
 # custom
-from lib.utils import birdfile2class, attribute2idx, get_class_attributes, get_image_attributes, get_attribute_name
+from lib.utils import birdfile2class, attribute2idx, get_class_attributes, get_image_attributes, get_attribute_name, birdfile2idx
 from lib.eval import get_output
-#, birdfile2idx, is_test_bird_idx, get_bird_bbox, get_bird_class, get_bird_part, get_part_location, get_multi_part_location, get_bird_name
-#  from lib.utils import get_attribute_name, code2certainty, get_class_attributes, get_image_attributes
 
 class SubColumn(Dataset):
     '''
@@ -51,6 +49,7 @@ class TransformWrapper(Dataset):
 
 class LearnedAttrWrapper(Dataset):
     '''
+    Deprecated: used for learn_concepts.py; now use concepts_model.py
     precompute learned attributes from attribute_model_names
     '''
 
@@ -91,7 +90,7 @@ class SubAttr(Dataset):
     def __init__(self, dataset, attr_names):
         self.dataset = dataset
         self.attr_indices = list(map(lambda attr: attribute2idx(attr) - 1,
-                                     attr_names)) # 0 - index
+                                     attr_names)) # 0 index
 
     def __len__(self):
         return len(self.dataset)
@@ -251,7 +250,7 @@ class CUB(Dataset):
             pivot_image_attributes = torch.load(f"{pwd}/../datasets/bird_data/attributes.pkl")
         self.image_attributes = torch.from_numpy(np.array(pivot_image_attributes['is_present'].\
             loc[:, [get_attribute_name(i) for i in range(1, 313)]].\
-            loc[list(range(1, len(pivot_image_attributes) + 1))])).float()
+            loc[[birdfile2idx(fn) for fn in self.images_path]])).float() # sort by image id
         
     def __len__(self):
         return len(self.images_path)

@@ -74,7 +74,7 @@ def cbm(concept_model_path,
     # regular model
     x2c = torch.load(f'{RootPath}/{concept_model_path}.pt')
     x2c.aux_logits = False
-    fc = nn.Linear(108, 200) # 200 bird classes
+    fc = nn.Linear(108, 200) # 200 bird classes # todo: support subset of features
     net = nn.Sequential(x2c, fc)
     net.to(device)
     net[0].eval()
