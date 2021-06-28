@@ -39,13 +39,15 @@ from lib.utils import get_attribute_name, code2certainty, get_class_attributes, 
 
 def get_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument("-o", "--outputs_dir", default=f"outputs",
+                        help="where to save all the outputs")
     parser.add_argument("--eval", action="store_true",
                         help="whether or not to eval the learned model")
     parser.add_argument("--retrain", action="store_true",
                         help="retrain using all train val data")
     parser.add_argument("--seed", type=int, default=42,
                         help="seed for reproducibility")
-    parser.add_argument("--transform", default="crop",
+    parser.add_argument("--transform", default="cbm",
                         help="transform mode to use")
     parser.add_argument("--lr_step", type=int, default=1000,
                         help="learning rate decay steps")
@@ -119,7 +121,7 @@ def standard_model(loader_xy, loader_xy_eval, loader_xy_te, loader_xy_val=None,
 
 if __name__ == '__main__':
     flags = get_args()
-    model_name = f"{RootPath}/models/standard"
+    model_name = f"{RootPath}/{flags.outputs_dir}/standard"
     print(model_name)
 
     cub = CUB()

@@ -39,7 +39,7 @@ from lib.utils import get_attribute_name, code2certainty, get_class_attributes, 
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-o", "--outputs_dir", default=f"models",
+    parser.add_argument("-o", "--outputs_dir", default=f"outputs",
                         help="where to save all the outputs")
     parser.add_argument("--eval", action="store_true",
                         help="whether or not to eval the learned model")
