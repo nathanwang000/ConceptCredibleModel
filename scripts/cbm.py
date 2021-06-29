@@ -30,12 +30,13 @@ FilePath = os.path.dirname(os.path.abspath(__file__))
 RootPath = os.path.dirname(FilePath)
 if RootPath not in sys.path: # parent directory
     sys.path = [RootPath] + sys.path
-from lib.models import MLP
+from lib.models import MLP, CUB_Subset_Concept_Model
 from lib.data import small_CUB, CUB, SubColumn, CUB_train_transform, CUB_test_transform
 from lib.train import train
 from lib.eval import get_output, test, plot_log, shap_net_x, shap_ccm_c, bootstrap
 from lib.utils import birdfile2class, birdfile2idx, is_test_bird_idx, get_bird_bbox, get_bird_class, get_bird_part, get_part_location, get_multi_part_location, get_bird_name
 from lib.utils import get_attribute_name, code2certainty, get_class_attributes, get_image_attributes, describe_bird
+from lib.utils import get_attr_names
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -58,12 +59,15 @@ def get_args():
     parser.add_argument("--concept_model_path", type=str,
                         default="gold_models/concepts_flip",
                         help="concept model path starting from root (ignore .pt)")
+    parser.add_argument("--concept_path", type=str,
+                        default="outputs/concepts/concepts_108.txt",
+                        help="path to file containing concept names")
     
     args = parser.parse_args()
     print(args)
     return args
 
-def cbm(concept_model_path,
+def cbm(attr_names, concept_model_path,
         loader_xy, loader_xy_eval, loader_xy_te, loader_xy_val=None,
         n_epochs=10, report_every=1, lr_step=1000,
         device='cuda', savepath=None, use_aux=False):
@@ -74,11 +78,16 @@ def cbm(concept_model_path,
     # regular model
     x2c = torch.load(f'{RootPath}/{concept_model_path}.pt')
     x2c.aux_logits = False
-    fc = nn.Linear(108, 200) # 200 bird classes # todo: support subset of features
-    net = nn.Sequential(x2c, fc)
+
+    attr_full_names = get_attr_names(f"{RootPath}/outputs/concepts/concepts_108.txt")
+    assert len(attr_full_names) == 108, "108 features required"
+    transition = CUB_Subset_Concept_Model(attr_names, attr_full_names)
+    fc = nn.Linear(len(attr_names), 200) # 200 bird classes    
+
+    net = nn.Sequential(x2c, transition, fc)
     net.to(device)
     net[0].eval()
-    net[1].train() # only train the linear part
+    net[2].train() # only train the linear part
     
     print('task acc before training: {:.1f}%'.format(test(net, loader_xy_te,
                                                           acc_criterion,
@@ -126,6 +135,9 @@ if __name__ == '__main__':
     model_name = f"{RootPath}/{flags.outputs_dir}/cbm"
     print(model_name)
 
+    # attributes to use
+    attr_names = get_attr_names(f"{RootPath}/{flags.concept_path}")
+    
     cub = CUB()
     test_indices = [i for i in range(len(cub)) if is_test_bird_idx(birdfile2idx(cub.images_path[i]))]    
     train_val_indices = [i for i in range(len(cub)) if not is_test_bird_idx(birdfile2idx(cub.images_path[i]))]
@@ -169,14 +181,14 @@ if __name__ == '__main__':
                                shuffle=True, num_workers=8)
         loader_xy_eval = DataLoader(SubColumn(cub_train_eval, ['x', 'y']), batch_size=32,
                                     shuffle=True, num_workers=8)
-        net = cbm(flags.concept_model_path,
+        net = cbm(attr_names, flags.concept_model_path,
                   loader_xy, loader_xy_eval,
                   loader_xy_te,
                   n_epochs=flags.n_epochs, report_every=1,
                   lr_step=flags.lr_step,
                   savepath=model_name, use_aux=flags.use_aux)
     else:
-        net = cbm(flags.concept_model_path,
+        net = cbm(attr_names, flags.concept_model_path,
                   loader_xy, loader_xy_eval,
                   loader_xy_te, loader_xy_val=loader_xy_val,
                   n_epochs=flags.n_epochs, report_every=1,

@@ -16,6 +16,14 @@ def dfs_freeze(model):
         dfs_freeze(child)
                                             
 ##### CUB specific utilities
+def get_attr_names(fn):
+    # attributes to use
+    attr_names = []
+    with open(fn, "r") as f:
+        for l in f:
+            attr_names.append(l.strip())
+    return attr_names
+
 def birdfile2class(filename):
     return int(filename.split("/")[-2][:3])
 

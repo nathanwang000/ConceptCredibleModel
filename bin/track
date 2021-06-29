@@ -8,20 +8,18 @@ All the tracking information are recorded in args.outputs_dir/tid
 examples:
   # run command with some message
   track [command] -m "some message"
-  # analogous to git log (to really mimic it run "track log | less")
+  # log o_dir (use | less to mimic git log)
   track log 
   # log only the tid entry of the log
-  track log [tid]
-  # read track log from o_dir
-  track log [tid] -o [o_dir]
-  # same more succinct
-  track log [o_dir/tid] # if conflict with -o, this takes precedence
+  track log [o_dir/tid] # will ignore "-o"
   # update message for the entry with tid
   track log [tid] -m "updated message"
   # removes tid from the log and its associated output directory
   track rm [tid]
   # removes tid from a directory
   track rm [o_dir/tid]
+  # make a directory
+  track mkdir [dir]
 
 assumes:
   [command] to run takes "--outputs_dir outputs/tid" as argument
@@ -47,6 +45,8 @@ def get_args():
                         help="meassage for this run")
     parser.add_argument("-o", "--outputs_dir", default="outputs",
                         help="where outputs are saved")
+    parser.add_argument("-n", "--no_outputs_dir", action="store_true",
+                        help="no outputs dir used")
     parser.add_argument("-l", "--report_level", default=1, type=int,
                         help="max report level")
     args = parser.parse_args()
@@ -115,10 +115,14 @@ if __name__ == "__main__":
 
         reports = []
         o_dir = flags.outputs_dir
-        if len(flags.command) == 2 and '/' in flags.command[1]:
+        if len(flags.command) == 2:
             o_dir = os.path.dirname(flags.command[1])
+            if o_dir == "": o_dir = "."
+            if flags.command[1] in ['.', '..']:
+                o_dir = flags.command[1]
 
-        if len(flags.command) == 2 and flags.command[1].split('/')[-1] != "":
+        if len(flags.command) == 2 and \
+           flags.command[1].split('/')[-1] not in ["", ".", '..']:
             # show specific tid            
             tid = flags.command[1].split('/')[-1]
             track_log = f"{o_dir}/{tid}/track.log"            
@@ -136,26 +140,36 @@ if __name__ == "__main__":
             records = gather_log(o_dir, max_level=flags.report_level)
             print(gen_report(records))
 
-    else: # run the command
-        # give a unique identifier directory
-        tid = uuid.uuid1().hex
-        o_dir = f"{flags.outputs_dir}/{tid}"
-        os.system(f"mkdir -p {o_dir}")
-
+    else: # run the command        
+        
+        if flags.command[0] == 'mkdir':
+            o_dir = flags.command[1]
+            tid = o_dir
+            track_log = f"{tid}/track.log"
+            os.system(f"mkdir -p {tid}")
+        else:
+            # give a unique identifier directory
+            tid = uuid.uuid1().hex
+            o_dir = f"{flags.outputs_dir}/{tid}"
+            os.system(f"mkdir -p {o_dir}")
+            track_log = f"{flags.outputs_dir}/{tid}/track.log"
+            
         record = {'date': datetime.datetime.now(),
                   'git': subprocess.check_output(["git", "rev-parse",
-                                                   "HEAD"]).strip().decode("utf-8"),
+                                                  "HEAD"]).strip().decode("utf-8"),
                   'tid': tid, # track id
                   'command': " ".join(flags.command),
                   'desc': flags.message
         }
-        track_log = f"{flags.outputs_dir}/{tid}/track.log"        
+
         torch.save(record, track_log)
-        
-        # do the actual job
-        command = " ".join(flags.command + [f'--outputs_dir {o_dir}'])
-        print(command)
-        os.system(command)
+
+        if flags.command[0] != 'mkdir':
+            # do the actual job
+            command = " ".join(flags.command + [f'--outputs_dir {o_dir}'])
+            
+            print(command)
+            os.system(command)
 
 
     

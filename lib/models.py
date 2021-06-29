@@ -40,8 +40,19 @@ class ConcatNet(nn.Module):
 
     def forward(self, args):
         return torch.cat(args, dim=self.dim)
-        
+    
 ######### specific models
+class CUB_Subset_Concept_Model(nn.Module):
+    '''
+    learned concept transition into attr_names
+    '''
+    def __init__(self, attr_subset_names, attr_full_names):
+        super().__init__()
+        self.attr_idx = [attr_full_names.index(name) for name in attr_subset_names]
+
+    def forward(self, x):
+        return x[:, self.attr_idx]
+        
 class GT_CUB_Subset_Concept_Model(nn.Module):
     '''
     ground truth concept model but subset of concepts in CUB
@@ -49,7 +60,8 @@ class GT_CUB_Subset_Concept_Model(nn.Module):
     def __init__(self, attributes_names):
         super().__init__()
         self.net = MLP([len(attributes_names), 200]) # logistic regression
-        # self.net = MLP([len(attributes_names), 30, 30, 200]) # doesn't help much
+        # doesn't matter much b/c class attribute is fixed
+        # self.net = MLP([len(attributes_names), 30, 30, 200])
         self.attr_idx = [attribute2idx(a)-1 for a in attributes_names] # 0-index
 
     def forward(self, x):

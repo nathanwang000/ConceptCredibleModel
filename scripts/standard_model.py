@@ -167,15 +167,15 @@ if __name__ == '__main__':
                                shuffle=True, num_workers=8)
         loader_xy_eval = DataLoader(SubColumn(cub_train_eval, ['x', 'y']), batch_size=32,
                                     shuffle=True, num_workers=8)
-        standard_net = standard_model(loader_xy, loader_xy_eval,
-                                      loader_xy_te,
-                                      n_epochs=flags.n_epochs, report_every=1,
-                                      lr_step=flags.lr_step,
-                                      savepath=model_name, use_aux=flags.use_aux)
+        net = standard_model(loader_xy, loader_xy_eval,
+                             loader_xy_te,
+                             n_epochs=flags.n_epochs, report_every=1,
+                             lr_step=flags.lr_step,
+                             savepath=model_name, use_aux=flags.use_aux)
     else:
-        standard_net = standard_model(loader_xy, loader_xy_eval,
-                                      loader_xy_te, loader_xy_val=loader_xy_val,
-                                      n_epochs=flags.n_epochs, report_every=1,
-                                      lr_step=flags.lr_step,
-                                      savepath=model_name, use_aux=flags.use_aux)
+        net = standard_model(loader_xy, loader_xy_eval,
+                             loader_xy_te, loader_xy_val=loader_xy_val,
+                             n_epochs=flags.n_epochs, report_every=1,
+                             lr_step=flags.lr_step,
+                             savepath=model_name, use_aux=flags.use_aux)
         
