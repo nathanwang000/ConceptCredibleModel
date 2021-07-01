@@ -20,6 +20,8 @@ examples:
   track rm [o_dir/tid]
   # make a directory
   track mkdir [dir]
+  # mv a directory elsewhere (changing its log)
+  track mv [tid1] [tid2]
 
 assumes:
   [command] to run takes "--outputs_dir outputs/tid" as argument
@@ -147,6 +149,14 @@ if __name__ == "__main__":
             tid = o_dir
             track_log = f"{tid}/track.log"
             os.system(f"mkdir -p {tid}")
+        elif flags.command[0] == 'mv':
+            tid1, tid = flags.command[1], flags.command[2]
+            track_log = f"{tid1}/track.log"
+            record = torch.load(f"{tid1}/track.log")
+            record['tid'] = tid.split("/")[-1]
+            torch.save(record, track_log)
+            os.system(f"mv {tid1} {tid}")
+            exit(0)
         else:
             # give a unique identifier directory
             tid = uuid.uuid1().hex
@@ -164,7 +174,7 @@ if __name__ == "__main__":
 
         torch.save(record, track_log)
 
-        if flags.command[0] != 'mkdir':
+        if flags.command[0] not in ['mkdir', 'mv']:
             # do the actual job
             command = " ".join(flags.command + [f'--outputs_dir {o_dir}'])
             

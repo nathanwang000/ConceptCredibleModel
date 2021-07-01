@@ -274,4 +274,4 @@ def describe_bird(filename):
     ## show image
     plt.axis('off')
     plt.show()
-
+    
