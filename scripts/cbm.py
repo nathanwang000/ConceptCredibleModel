@@ -30,7 +30,7 @@ FilePath = os.path.dirname(os.path.abspath(__file__))
 RootPath = os.path.dirname(FilePath)
 if RootPath not in sys.path: # parent directory
     sys.path = [RootPath] + sys.path
-from lib.models import MLP, CUB_Subset_Concept_Model, CBM
+from lib.models import MLP, CUB_Subset_Concept_Model, CBM, LambdaNet
 from lib.data import small_CUB, CUB, SubColumn, CUB_train_transform, CUB_test_transform
 from lib.data import SubAttr
 from lib.train import train, train_step_xyc
@@ -70,6 +70,12 @@ def get_args():
     print(args)
     return args
 
+def binary_sigmoid(x):
+    '''
+    discretize sigmoid on top
+    '''
+    return (torch.sigmoid(x) > 0.5).float()
+
 def cbm(attr_names, concept_model_path,
         loader_xyc, loader_xyc_eval, loader_xyc_te, loader_xyc_val=None,
         n_epochs=10, report_every=1, lr_step=1000,
@@ -90,6 +96,8 @@ def cbm(attr_names, concept_model_path,
 
     if independent:
         x2c = nn.Sequential(x2c, transition, nn.Sigmoid())
+        # x2c = nn.Sequential(x2c, transition,
+        #                     LambdaNet(binary_sigmoid))
     else:
         x2c = nn.Sequential(x2c, transition)
         
@@ -211,15 +219,3 @@ if __name__ == '__main__':
                   lr_step=flags.lr_step,
                   savepath=model_name, use_aux=flags.use_aux,
                   independent=flags.ind)
-        
-    '''
-    TODO: 
-    1. change loader_xy to loader_xyc (done)
-    2. check the order of concept is the same in concept_model.py (yes)
-    3. extract attr with subcolumn in loader (done)
-    4. use train_step_xyc (done)
-    5. change criterion to take 4-5 inputs (done)
-    6. add independent option ot the argument, use independent in cbm (done)
-    7. use discrete output for prediction of independent
-    4. repeat for ccm.py
-    '''

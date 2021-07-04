@@ -40,7 +40,7 @@ class ConcatNet(nn.Module):
 
     def forward(self, args):
         return torch.cat(args, dim=self.dim)
-    
+
 ######### specific models
 class CUB_Subset_Concept_Model(nn.Module):
     '''

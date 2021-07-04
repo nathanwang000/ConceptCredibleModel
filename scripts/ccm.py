@@ -32,6 +32,7 @@ if RootPath not in sys.path: # parent directory
     sys.path = [RootPath] + sys.path
 from lib.models import MLP, LambdaNet, CCM, ConcatNet, CUB_Subset_Concept_Model
 from lib.data import small_CUB, CUB, SubColumn, CUB_train_transform, CUB_test_transform
+from lib.data import SubAttr
 from lib.train import train
 from lib.eval import get_output, test, plot_log, shap_net_x, shap_ccm_c, bootstrap
 from lib.utils import birdfile2class, birdfile2idx, is_test_bird_idx, get_bird_bbox, get_bird_class, get_bird_part, get_part_location, get_multi_part_location, get_bird_name
@@ -180,13 +181,17 @@ if __name__ == '__main__':
     acc_criterion = lambda o, y: (o.argmax(1) == y).float()
 
     # dataset
-    loader_xyc = DataLoader(SubColumn(cub_train, ['x', 'y']), batch_size=32,
+    loader_xyc = DataLoader(SubColumn(SubAttr(cub_train, attr_names),
+                                      ['x', 'y', 'attr']), batch_size=32,
                            shuffle=True, num_workers=8)
-    loader_xyc_val = DataLoader(SubColumn(cub_val, ['x', 'y']), batch_size=32,
+    loader_xyc_val = DataLoader(SubColumn(SubAttr(cub_val, attr_names),
+                                          ['x', 'y', 'attr']), batch_size=32,
                                shuffle=False, num_workers=8)
-    loader_xyc_te = DataLoader(SubColumn(cub_test, ['x', 'y']), batch_size=32,
+    loader_xyc_te = DataLoader(SubColumn(SubAttr(cub_test, attr_names),
+                                         ['x', 'y', 'attr']), batch_size=32,
                               shuffle=False, num_workers=8)
-    loader_xyc_eval = DataLoader(SubColumn(cub_train_eval, ['x', 'y']), batch_size=32,
+    loader_xyc_eval = DataLoader(SubColumn(SubAttr(cub_train_eval, attr_names),
+                                           ['x', 'y', 'attr']), batch_size=32,
                                 shuffle=True, num_workers=8)
 
     print(f"# train: {len(cub_train)}, # val: {len(cub_val)}, # test: {len(cub_test)}")
@@ -200,9 +205,11 @@ if __name__ == '__main__':
                                         mode=flags.transform)
         cub_train_eval = CUB_test_transform(Subset(cub, train_val_indices),
                                              mode=flags.transform)
-        loader_xyc = DataLoader(SubColumn(cub_train, ['x', 'y']), batch_size=32,
+        loader_xyc = DataLoader(SubColumn(SubAttr(cub_train, attr_names),
+                                          ['x', 'y', 'attr']), batch_size=32,
                                shuffle=True, num_workers=8)
-        loader_xyc_eval = DataLoader(SubColumn(cub_train_eval, ['x', 'y']), batch_size=32,
+        loader_xyc_eval = DataLoader(SubColumn(SubAttr(cub_train_eval, attr_names),
+                                               ['x', 'y', 'attr']), batch_size=32,
                                     shuffle=True, num_workers=8)
         net = ccm(attr_names, flags.concept_model_path,
                   loader_xyc, loader_xyc_eval,
@@ -219,4 +226,15 @@ if __name__ == '__main__':
                   n_epochs=flags.n_epochs, report_every=1,
                   lr_step=flags.lr_step,
                   savepath=model_name, use_aux=flags.use_aux)
+        
+
+    '''
+    TODO: 
+    1. change loader_xy to loader_xyc (done)
+    2. check the order of concept is the same in concept_model.py (yes)
+    3. extract attr with subcolumn in loader (done)
+    4. use train_step_xyc
+    5. change criterion to take 4-5 inputs
+    6. add independent option ot the argument, use independent in cbm
+    '''
         
