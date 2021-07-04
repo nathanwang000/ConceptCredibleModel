@@ -1,5 +1,5 @@
 '''
-this files trains an sequential CBM
+this files trains a sequential or independent CBM
 '''
 import sys, os
 import tqdm
@@ -30,9 +30,10 @@ FilePath = os.path.dirname(os.path.abspath(__file__))
 RootPath = os.path.dirname(FilePath)
 if RootPath not in sys.path: # parent directory
     sys.path = [RootPath] + sys.path
-from lib.models import MLP, CUB_Subset_Concept_Model
+from lib.models import MLP, CUB_Subset_Concept_Model, CBM
 from lib.data import small_CUB, CUB, SubColumn, CUB_train_transform, CUB_test_transform
-from lib.train import train
+from lib.data import SubAttr
+from lib.train import train, train_step_xyc
 from lib.eval import get_output, test, plot_log, shap_net_x, shap_ccm_c, bootstrap
 from lib.utils import birdfile2class, birdfile2idx, is_test_bird_idx, get_bird_bbox, get_bird_class, get_bird_part, get_part_location, get_multi_part_location, get_bird_name
 from lib.utils import get_attribute_name, code2certainty, get_class_attributes, get_image_attributes, describe_bird
@@ -44,6 +45,8 @@ def get_args():
                         help="where to save all the outputs")
     parser.add_argument("--eval", action="store_true",
                         help="whether or not to eval the learned model")
+    parser.add_argument("--ind", action="store_true",
+                        help="whether or not to train independent CBM")
     parser.add_argument("--retrain", action="store_true",
                         help="retrain using all train val data")
     parser.add_argument("--seed", type=int, default=42,
@@ -68,12 +71,13 @@ def get_args():
     return args
 
 def cbm(attr_names, concept_model_path,
-        loader_xy, loader_xy_eval, loader_xy_te, loader_xy_val=None,
+        loader_xyc, loader_xyc_eval, loader_xyc_te, loader_xyc_val=None,
         n_epochs=10, report_every=1, lr_step=1000,
+        independent=False,
         device='cuda', savepath=None, use_aux=False):
     '''
-    loader_xy_eval is the evaluation of loader_xy
-    if loader_xy_val: use early stopping, otherwise train for the number of epochs
+    loader_xyc_eval is the evaluation of loader_xyc
+    if loader_xyc_val: use early stopping, otherwise train for the number of epochs
     '''
     # regular model
     x2c = torch.load(f'{RootPath}/{concept_model_path}.pt')
@@ -84,48 +88,53 @@ def cbm(attr_names, concept_model_path,
     transition = CUB_Subset_Concept_Model(attr_names, attr_full_names)
     fc = nn.Linear(len(attr_names), 200) # 200 bird classes    
 
-    net = nn.Sequential(x2c, transition, fc)
+    if independent:
+        x2c = nn.Sequential(x2c, transition, nn.Sigmoid())
+    else:
+        x2c = nn.Sequential(x2c, transition)
+        
+    net = CBM(x2c, fc, c_no_grad=True) # default to sequential CBM
     net.to(device)
-    net[0].eval()
-    net[2].train() # only train the linear part
     
-    print('task acc before training: {:.1f}%'.format(test(net, loader_xy_te,
+    print('task acc before training: {:.1f}%'.format(test(net, loader_xyc_te,
                                                           acc_criterion,
                                                           device=device) * 100))
-    criterion = lambda o, y: F.cross_entropy(o, y)
+    criterion = lambda o_y, y, o_c, c: F.cross_entropy(o_y, y)
     
     # train
-    opt = optim.SGD(fc.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0004)
+    opt = optim.SGD(net.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0004)
     scheduler = lr_scheduler.StepLR(opt, step_size=lr_step)
-    if loader_xy_val:
-        log = train(net, loader_xy, opt, criterion=criterion,
+    if loader_xyc_val:
+        log = train(net, loader_xyc, opt, criterion=criterion,
+                    train_step=train_step_xyc,
+                    independent=independent,
                     n_epochs=n_epochs, report_every=report_every,
                     device=device, savepath=savepath,
-                    report_dict={'val acc': (lambda m: test(m, loader_xy_val,
+                    report_dict={'val acc': (lambda m: test(m, loader_xyc_val,
                                                             acc_criterion,
                                                             device=device) * 100, 'max'),
-                                 'train acc': (lambda m: test(m, loader_xy_eval,
+                                 'train acc': (lambda m: test(m, loader_xyc_eval,
                                                               acc_criterion,
                                                               device=device) * 100,
                                                'max')},
                     early_stop_metric='val acc',
-                    train_mode = False,
                     scheduler=scheduler)
     else:
-        log = train(net, loader_xy, opt, criterion=criterion,
+        log = train(net, loader_xyc, opt, criterion=criterion,
+                    train_step=train_step_xyc,
+                    independent=independent,                    
                     n_epochs=n_epochs, report_every=report_every,
                     device=device, savepath=savepath,
-                    report_dict={'train acc': (lambda m: test(m, loader_xy_eval,
+                    report_dict={'train acc': (lambda m: test(m, loader_xyc_eval,
                                                             acc_criterion,
                                                             device=device) * 100, 'max'),
-                                 'test acc': (lambda m: test(m, loader_xy_te,
+                                 'test acc': (lambda m: test(m, loader_xyc_te,
                                                               acc_criterion,
                                                               device=device) * 100,
                                                'max')},
-                    train_mode = False,
                     scheduler=scheduler)
 
-    print('task acc after training: {:.1f}%'.format(test(net, loader_xy_te,
+    print('task acc after training: {:.1f}%'.format(test(net, loader_xyc_te,
                                                          acc_criterion,
                                                          device=device) * 100))        
     return net
@@ -157,13 +166,17 @@ if __name__ == '__main__':
     acc_criterion = lambda o, y: (o.argmax(1) == y).float()
 
     # dataset
-    loader_xy = DataLoader(SubColumn(cub_train, ['x', 'y']), batch_size=32,
+    loader_xyc = DataLoader(SubColumn(SubAttr(cub_train, attr_names),
+                                      ['x', 'y', 'attr']), batch_size=32,
                            shuffle=True, num_workers=8)
-    loader_xy_val = DataLoader(SubColumn(cub_val, ['x', 'y']), batch_size=32,
+    loader_xyc_val = DataLoader(SubColumn(SubAttr(cub_val, attr_names),
+                                          ['x', 'y', 'attr']), batch_size=32,
                                shuffle=False, num_workers=8)
-    loader_xy_te = DataLoader(SubColumn(cub_test, ['x', 'y']), batch_size=32,
+    loader_xyc_te = DataLoader(SubColumn(SubAttr(cub_test, attr_names),
+                                         ['x', 'y', 'attr']), batch_size=32,
                               shuffle=False, num_workers=8)
-    loader_xy_eval = DataLoader(SubColumn(cub_train_eval, ['x', 'y']), batch_size=32,
+    loader_xyc_eval = DataLoader(SubColumn(SubAttr(cub_train_eval, attr_names),
+                                           ['x', 'y', 'attr']), batch_size=32,
                                 shuffle=True, num_workers=8)
 
     print(f"# train: {len(cub_train)}, # val: {len(cub_val)}, # test: {len(cub_test)}")
@@ -171,27 +184,42 @@ if __name__ == '__main__':
     if flags.eval:
         print('task acc after training: {:.1f}%'.format(
             test(torch.load(f'{model_name}.pt'),
-                 loader_xy_te, acc_criterion, device='cuda') * 100))
+                 loader_xyc_te, acc_criterion, device='cuda') * 100))
     elif flags.retrain:
         cub_train = CUB_train_transform(Subset(cub, train_val_indices),
                                         mode=flags.transform)
         cub_train_eval = CUB_test_transform(Subset(cub, train_val_indices),
                                              mode=flags.transform)
-        loader_xy = DataLoader(SubColumn(cub_train, ['x', 'y']), batch_size=32,
+        loader_xyc = DataLoader(SubColumn(SubAttr(cub_train, attr_names),
+                                          ['x', 'y', 'attr']), batch_size=32,
                                shuffle=True, num_workers=8)
-        loader_xy_eval = DataLoader(SubColumn(cub_train_eval, ['x', 'y']), batch_size=32,
+        loader_xyc_eval = DataLoader(SubColumn(SubAttr(cub_train_eval, attr_names),
+                                               ['x', 'y', 'attr']), batch_size=32,
                                     shuffle=True, num_workers=8)
         net = cbm(attr_names, flags.concept_model_path,
-                  loader_xy, loader_xy_eval,
-                  loader_xy_te,
+                  loader_xyc, loader_xyc_eval,
+                  loader_xyc_te,
                   n_epochs=flags.n_epochs, report_every=1,
                   lr_step=flags.lr_step,
-                  savepath=model_name, use_aux=flags.use_aux)
+                  savepath=model_name, use_aux=flags.use_aux,
+                  independent=flags.ind)
     else:
         net = cbm(attr_names, flags.concept_model_path,
-                  loader_xy, loader_xy_eval,
-                  loader_xy_te, loader_xy_val=loader_xy_val,
+                  loader_xyc, loader_xyc_eval,
+                  loader_xyc_te, loader_xyc_val=loader_xyc_val,
                   n_epochs=flags.n_epochs, report_every=1,
                   lr_step=flags.lr_step,
-                  savepath=model_name, use_aux=flags.use_aux)
+                  savepath=model_name, use_aux=flags.use_aux,
+                  independent=flags.ind)
         
+    '''
+    TODO: 
+    1. change loader_xy to loader_xyc (done)
+    2. check the order of concept is the same in concept_model.py (yes)
+    3. extract attr with subcolumn in loader (done)
+    4. use train_step_xyc (done)
+    5. change criterion to take 4-5 inputs (done)
+    6. add independent option ot the argument, use independent in cbm (done)
+    7. use discrete output for prediction of independent
+    4. repeat for ccm.py
+    '''

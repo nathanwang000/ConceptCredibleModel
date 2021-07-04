@@ -71,13 +71,13 @@ def get_args():
     return args
 
 def ccm(attr_names, concept_model_path,
-        loader_xy, loader_xy_eval, loader_xy_te, loader_xy_val=None,
+        loader_xyc, loader_xyc_eval, loader_xyc_te, loader_xyc_val=None,
         n_epochs=10, report_every=1, lr_step=1000,
         u_model_path=None,
         device='cuda', savepath=None, use_aux=False):
     '''
-    loader_xy_eval is the evaluation of loader_xy
-    if loader_xy_val: use early stopping, otherwise train for the number of epochs
+    loader_xyc_eval is the evaluation of loader_xyc
+    if loader_xyc_val: use early stopping, otherwise train for the number of epochs
     '''
     attr_full_names = get_attr_names(f"{RootPath}/outputs/concepts/concepts_108.txt")
     assert len(attr_full_names) == 108, "108 features required"
@@ -108,7 +108,7 @@ def ccm(attr_names, concept_model_path,
     net = CCM(x2c, x2u, net_y, c_no_grad=True, u_no_grad=True)
     net.to(device)
     
-    print('task acc before training: {:.1f}%'.format(test(net, loader_xy_te,
+    print('task acc before training: {:.1f}%'.format(test(net, loader_xyc_te,
                                                           acc_criterion,
                                                           device=device) * 100))
     # todo: add regularization to both u and c
@@ -122,33 +122,33 @@ def ccm(attr_names, concept_model_path,
     # train
     opt = optim.SGD(net.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0004)
     scheduler = lr_scheduler.StepLR(opt, step_size=lr_step)
-    if loader_xy_val:
-        log = train(net, loader_xy, opt, criterion=criterion,
+    if loader_xyc_val:
+        log = train(net, loader_xyc, opt, criterion=criterion,
                     n_epochs=n_epochs, report_every=report_every,
                     device=device, savepath=savepath,
-                    report_dict={'val acc': (lambda m: test(m, loader_xy_val,
+                    report_dict={'val acc': (lambda m: test(m, loader_xyc_val,
                                                             acc_criterion,
                                                             device=device) * 100, 'max'),
-                                 'train acc': (lambda m: test(m, loader_xy_eval,
+                                 'train acc': (lambda m: test(m, loader_xyc_eval,
                                                               acc_criterion,
                                                               device=device) * 100,
                                                'max')},
                     early_stop_metric='val acc',
                     scheduler=scheduler)
     else:
-        log = train(net, loader_xy, opt, criterion=criterion,
+        log = train(net, loader_xyc, opt, criterion=criterion,
                     n_epochs=n_epochs, report_every=report_every,
                     device=device, savepath=savepath,
-                    report_dict={'train acc': (lambda m: test(m, loader_xy_eval,
+                    report_dict={'train acc': (lambda m: test(m, loader_xyc_eval,
                                                             acc_criterion,
                                                             device=device) * 100, 'max'),
-                                 'test acc': (lambda m: test(m, loader_xy_te,
+                                 'test acc': (lambda m: test(m, loader_xyc_te,
                                                               acc_criterion,
                                                               device=device) * 100,
                                                'max')},
                     scheduler=scheduler)
 
-    print('task acc after training: {:.1f}%'.format(test(net, loader_xy_te,
+    print('task acc after training: {:.1f}%'.format(test(net, loader_xyc_te,
                                                          acc_criterion,
                                                          device=device) * 100))        
     return net
@@ -180,13 +180,13 @@ if __name__ == '__main__':
     acc_criterion = lambda o, y: (o.argmax(1) == y).float()
 
     # dataset
-    loader_xy = DataLoader(SubColumn(cub_train, ['x', 'y']), batch_size=32,
+    loader_xyc = DataLoader(SubColumn(cub_train, ['x', 'y']), batch_size=32,
                            shuffle=True, num_workers=8)
-    loader_xy_val = DataLoader(SubColumn(cub_val, ['x', 'y']), batch_size=32,
+    loader_xyc_val = DataLoader(SubColumn(cub_val, ['x', 'y']), batch_size=32,
                                shuffle=False, num_workers=8)
-    loader_xy_te = DataLoader(SubColumn(cub_test, ['x', 'y']), batch_size=32,
+    loader_xyc_te = DataLoader(SubColumn(cub_test, ['x', 'y']), batch_size=32,
                               shuffle=False, num_workers=8)
-    loader_xy_eval = DataLoader(SubColumn(cub_train_eval, ['x', 'y']), batch_size=32,
+    loader_xyc_eval = DataLoader(SubColumn(cub_train_eval, ['x', 'y']), batch_size=32,
                                 shuffle=True, num_workers=8)
 
     print(f"# train: {len(cub_train)}, # val: {len(cub_val)}, # test: {len(cub_test)}")
@@ -194,27 +194,27 @@ if __name__ == '__main__':
     if flags.eval:
         print('task acc after training: {:.1f}%'.format(
             test(torch.load(f'{model_name}.pt'),
-                 loader_xy_te, acc_criterion, device='cuda') * 100))
+                 loader_xyc_te, acc_criterion, device='cuda') * 100))
     elif flags.retrain:
         cub_train = CUB_train_transform(Subset(cub, train_val_indices),
                                         mode=flags.transform)
         cub_train_eval = CUB_test_transform(Subset(cub, train_val_indices),
                                              mode=flags.transform)
-        loader_xy = DataLoader(SubColumn(cub_train, ['x', 'y']), batch_size=32,
+        loader_xyc = DataLoader(SubColumn(cub_train, ['x', 'y']), batch_size=32,
                                shuffle=True, num_workers=8)
-        loader_xy_eval = DataLoader(SubColumn(cub_train_eval, ['x', 'y']), batch_size=32,
+        loader_xyc_eval = DataLoader(SubColumn(cub_train_eval, ['x', 'y']), batch_size=32,
                                     shuffle=True, num_workers=8)
         net = ccm(attr_names, flags.concept_model_path,
-                  loader_xy, loader_xy_eval,
-                  loader_xy_te,
+                  loader_xyc, loader_xyc_eval,
+                  loader_xyc_te,
                   u_model_path = flags.u_model_path,
                   n_epochs=flags.n_epochs, report_every=1,
                   lr_step=flags.lr_step,
                   savepath=model_name, use_aux=flags.use_aux)
     else:
         net = ccm(attr_names, flags.concept_model_path,
-                  loader_xy, loader_xy_eval,
-                  loader_xy_te, loader_xy_val=loader_xy_val,
+                  loader_xyc, loader_xyc_eval,
+                  loader_xyc_te, loader_xyc_val=loader_xyc_val,
                   u_model_path = flags.u_model_path,                  
                   n_epochs=flags.n_epochs, report_every=1,
                   lr_step=flags.lr_step,

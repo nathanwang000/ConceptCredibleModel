@@ -54,7 +54,8 @@ def test(net, loader, criterion, device='cpu'):
     net.eval()
     losses = []
     total = 0
-    for x, y in tqdm.tqdm(loader, desc="test eval"):
+    for d in tqdm.tqdm(loader, desc="test eval"):
+        x, y = d[0], d[1] # assume the first 2 are x, y to accomendate xyc
         x, y = x.to(device), y.to(device)
         o = net(x)
         l = criterion(o, y).mean()

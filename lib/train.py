@@ -6,7 +6,7 @@ import torch
 # custom import
 from lib.models import CBM, CCM
 
-def train_step_standard(net, loader, opt, criterion, device='cpu'):
+def train_step_standard(net, loader, opt, criterion, device='cpu', **kwargs):
     losses = []
     for x, y in tqdm.tqdm(loader, desc="train step for 1 epoch"):
         x, y = x.to(device), y.to(device)
@@ -25,8 +25,8 @@ def train_step_xyc(net, loader, opt, criterion, independent=False, device='cpu')
     '''
     assert type(net) in [CBM, CCM], f"must use CBM or CCM model; currently {type(net)}"
     losses = []
-    for x, y, c in tqdm.tqdm(loader, desc="train step for 1 epoch CBM"):
-        x, y, c = x.to(device), y.to(device), c.to(device)
+    for x, y, c in tqdm.tqdm(loader, desc="train step for 1 epoch xyc"):
+        x, y, c = x.to(device), y.to(device), c.to(device).float()
         opt.zero_grad()
 
         if type(net) == CBM:
@@ -59,14 +59,14 @@ def train(net, loader, opt, train_step=train_step_standard,
           criterion=F.cross_entropy, n_epochs=10, report_every=1,
           device="cpu", savepath=None, report_dict={},
           early_stop_metric=None, patience=20, scheduler=None,
-          train_mode=True):
+          **kwargs):
     '''
     report dict take the form: {"func_name": (f, mode)} where f takes net as input, mode is "max" or "min"
     an example is {"val_loss": lambda net: get_loss(net, val_loader)}
     
     es_metric: early stopping metric (string in report_dict)
     '''
-    if train_mode: net.train()
+    net.train()
     train_log, losses = [], []
     if early_stop_metric in report_dict:
         f, es_mode = report_dict[early_stop_metric]
@@ -74,7 +74,8 @@ def train(net, loader, opt, train_step=train_step_standard,
 
     for i in range(n_epochs):
         
-        _losses = train_step(net, loader, opt, criterion, device=device)
+        _losses = train_step(net, loader, opt, criterion,
+                             device=device, **kwargs)
         losses.extend(_losses)
 
         if scheduler:

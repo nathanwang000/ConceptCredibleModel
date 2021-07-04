@@ -121,13 +121,20 @@ class CBM(nn.Module):
     it output net_y(net_c(x))
     '''
 
-    def __init__(self, net_c, net_y): 
+    def __init__(self, net_c, net_y, c_no_grad=True): 
         super().__init__()
         self.net_c = net_c
         self.net_y = net_y
+        self.c_no_grad = c_no_grad
 
     def get_oc(self, x):
-        return self.net_c(x)
+        if self.c_no_grad:
+            with torch.no_grad():
+                self.net_c.eval()
+                o_c = self.net_c(x)
+        else:
+            o_c = self.net_c(x)
+        return o_c
 
     def forward(self, x):
         o_c = self.get_oc(x)
