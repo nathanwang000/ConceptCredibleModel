@@ -81,7 +81,7 @@ def ccm(attr_names, concept_model_path,
     '''
     attr_full_names = get_attr_names(f"{RootPath}/outputs/concepts/concepts_108.txt")
     assert len(attr_full_names) == 108, "108 features required"
-    transition = CUB_Subset_Concept_Model(attr_names, attr_full_names)
+    transition = CUB_Subset_Concept_Model(attr_names, attr_full_names) # use subset
     
     d_x2u = 200 # give it a chance to learn standard model
     d_x2c = len(attr_names) # 108 concepts
@@ -104,8 +104,8 @@ def ccm(attr_names, concept_model_path,
     # combined model: could use 2 gpus to run if memory is an issue
     net_y = nn.Sequential(ConcatNet(dim=1), nn.Linear(d_x2c + d_x2u, 200))
     
-    # combined model: todo: u_no_grad=True gives better performance
-    net = CCM(x2c, x2u, net_y, c_no_grad=True, u_no_grad=False)
+    # combined model: todo: should eventually u_no_grad=False 
+    net = CCM(x2c, x2u, net_y, c_no_grad=True, u_no_grad=True)
     net.to(device)
     
     print('task acc before training: {:.1f}%'.format(test(net, loader_xy_te,
