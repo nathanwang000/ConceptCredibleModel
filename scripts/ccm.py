@@ -104,8 +104,8 @@ def ccm(attr_names, concept_model_path,
     # combined model: could use 2 gpus to run if memory is an issue
     net_y = nn.Sequential(ConcatNet(dim=1), nn.Linear(d_x2c + d_x2u, 200))
     
-    # combined model: todo: u_no_grad should be False
-    net = CCM(x2c, x2u, net_y, c_no_grad=True, u_no_grad=True)
+    # combined model: todo: u_no_grad=True gives better performance
+    net = CCM(x2c, x2u, net_y, c_no_grad=True, u_no_grad=False)
     net.to(device)
     
     print('task acc before training: {:.1f}%'.format(test(net, loader_xy_te,

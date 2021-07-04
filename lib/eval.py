@@ -110,9 +110,9 @@ def shap_net_x(net, shap_x, bs, instance_idx=None, output_idx=None, decimal=2, o
         for i in range(d_o):
             explain_one_output(i)
 
-def shap_ccm_c(ccm, shap_x, bs, instance_idx=None, output_idx=None, c_name='Z', not_c_name='U', output_name='hat Y', decimal=2):
+def shap_ccm_c(ccm, shap_x, bs, instance_idx=None, output_idx=None, c_name='Z', u_name='U', output_name='hat Y', decimal=2):
     '''
-    explain ccm at concept level: the first part is interpretable (c_name), the second part is not (not_c_name)
+    explain ccm at concept level: the first part is interpretable (c_name), the second part is not (u_name)
     shap_x is pd.DataFrame to explain using shap
     '''
     assert type(ccm) is CCM, "this function only applies to CCM model"
@@ -123,10 +123,10 @@ def shap_ccm_c(ccm, shap_x, bs, instance_idx=None, output_idx=None, c_name='Z', 
                        DataLoader(TensorDataset(explain_X), batch_size=bs, shuffle=False))
     c = z_hat.shape[1]
     z_hat = pd.DataFrame(z_hat, columns=[f'{c_name}{i}' for i in range(c)])
-    u_hat = get_output(ccm.net_not_c,
+    u_hat = get_output(ccm.net_u,
                        DataLoader(TensorDataset(explain_X), batch_size=bs, shuffle=False))
-    not_c = u_hat.shape[1]
-    u_hat = pd.DataFrame(u_hat, columns=[f'{not_c_name}{i}' for i in range(not_c)])
+    u = u_hat.shape[1]
+    u_hat = pd.DataFrame(u_hat, columns=[f'{u_name}{i}' for i in range(u)])
     shap_zu = pd.concat((z_hat, u_hat), 1)
                 
     # print prediction
@@ -143,7 +143,7 @@ def shap_ccm_c(ccm, shap_x, bs, instance_idx=None, output_idx=None, c_name='Z', 
     
         ccm_concept = lambda x: F.softmax(ccm.net_y(
             [torch.from_numpy(x[:, :c]),
-            torch.from_numpy(x[:, -not_c:])]
+            torch.from_numpy(x[:, -u:])]
         ), 1).detach()[:, i].numpy()
 
         # shap explanation

@@ -73,36 +73,46 @@ class CCM(nn.Module):
     '''
     concept credible model
     '''
-    def __init__(self, net_c, net_not_c, net_y, c_no_grad=True, u_no_grad=False):
+    def __init__(self, net_c, net_u, net_y, c_no_grad=True, u_no_grad=False):
         '''
-        f(x) = net_y(net_c(x), net_not_c(x))
+        f(x) = net_y(net_c(x), net_u(x))
         net_c and net_not_c output (n, d_*)
         c_no_grad: known concept model doesn't need gradient (save gpu memory)
         u_no_grad: unknown concept model doesn't need gradient
         '''
         super().__init__()
         self.net_c = net_c
-        self.net_not_c = net_not_c
+        self.net_u = net_u
         self.net_y = net_y
         self.c_no_grad = c_no_grad
         self.u_no_grad = u_no_grad
-        
-    def forward(self, x):
+
+    def get_oc(self, x):
+
         if self.c_no_grad:
             with torch.no_grad():
                 self.net_c.eval()
-                c = self.net_c(x)
+                o_c = self.net_c(x)
         else:
-            c = self.net_c(x)
+            o_c = self.net_c(x)
+            
+        return o_c
+
+    def get_ou(self, x):
 
         if self.u_no_grad:
             with torch.no_grad():
-                self.net_not_c.eval()
-                u = self.net_not_c(x)
+                self.net_u.eval()
+                o_u = self.net_u(x)
         else:
-            u = self.net_not_c(x)
-            
-        return self.net_y([c, u])
+            o_u = self.net_u(x)
+        return o_u
+
+    def forward(self, x):
+        o_c = self.get_oc(x)
+        o_u = self.get_ou(x)
+        o_y = self.net_y([o_c, o_u])
+        return o_y
     
 class CBM(nn.Module):
     '''
@@ -115,9 +125,13 @@ class CBM(nn.Module):
         super().__init__()
         self.net_c = net_c
         self.net_y = net_y
-        
-        self.classifier = nn.Sequential(net_c, net_y)
-        
+
+    def get_oc(self, x):
+        return self.net_c(x)
+
     def forward(self, x):
-        return self.classifier(x)
+        o_c = self.get_oc(x)
+        o_y = self.net_y(o_c)
+        return o_y
+        
 

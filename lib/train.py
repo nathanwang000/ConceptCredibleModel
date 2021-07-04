@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 # custom import
-from lib.models import CBM
+from lib.models import CBM, CCM
 
 def train_step_standard(net, loader, opt, criterion, device='cpu'):
     losses = []
@@ -18,16 +18,38 @@ def train_step_standard(net, loader, opt, criterion, device='cpu'):
         losses.append(l.detach().item())
     return losses
     
-def train_step_xyz(net, loader, opt, criterion, device='cpu'):
-    '''training step for EBM jont model'''
-    assert type(net) == CBM, f"must use CBM model; currently {type(net)}"
+def train_step_xyc(net, loader, opt, criterion, independent=False, device='cpu'):
+    '''
+    training step for CBM or CCM model
+    independent means whether to train concept and tasks independently
+    '''
+    assert type(net) in [CBM, CCM], f"must use CBM or CCM model; currently {type(net)}"
     losses = []
-    for x, y, z in loader:
-        x, y, z = x.to(device), y.to(device), z.to(device)
+    for x, y, c in tqdm.tqdm(loader, desc="train step for 1 epoch CBM"):
+        x, y, c = x.to(device), y.to(device), c.to(device)
         opt.zero_grad()
-        o_z = net.net_c(x)
-        o_y = net.net_y(o_z)
-        l = criterion(o_y, y, o_z, z).mean()
+
+        if type(net) == CBM:
+            if independent:
+                o_c = None
+                o_y = net.net_y(c)
+            else:
+                o_c = net.get_oc(x)
+                o_y = net.net_y(o_c)
+            l = criterion(o_y, y, o_c, c).mean()
+        elif type(net)== CCM:
+
+            if independent:
+                o_c = None
+                o_u = net.get_ou(x)
+                o_y = net.net_y([c, o_u])
+            else:
+                o_c = net.get_oc(x)
+                o_u = net.get_ou(x)
+                o_y = net.net_y([o_c, o_u])
+                
+            l = criterion(o_y, y, o_c, c, o_u).mean()
+            
         l.backward()
         opt.step()
         losses.append(l.detach().item())
