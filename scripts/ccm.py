@@ -37,7 +37,6 @@ from lib.eval import get_output, test, plot_log, shap_net_x, shap_ccm_c, bootstr
 from lib.utils import birdfile2class, birdfile2idx, is_test_bird_idx, get_bird_bbox, get_bird_class, get_bird_part, get_part_location, get_multi_part_location, get_bird_name
 from lib.utils import get_attribute_name, code2certainty, get_class_attributes, get_image_attributes, describe_bird
 from lib.utils import get_attr_names
-from lib.regularization import linear_pred_loss
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -115,7 +114,7 @@ def ccm(attr_names, concept_model_path,
     # todo: add regularization to both u and c
     # lambda o, y, o_c, c, o_u:
     # F.cross_entropy(o, y) + 0.1 * (grad(o[y], o_u, create_graph=True)**2).sum()
-    # - 0.1 * linear_pred_loss(c, o_u) # use c b/c o_c may not properly learned
+    # + 0.1 * R_sq(c, o_u) # use c b/c o_c may not properly learned
     # make sure the 3 losses are at the same scale (is there a research question?)
     # and let dataset give x, y, c
     criterion = lambda o, y: F.cross_entropy(o, y)

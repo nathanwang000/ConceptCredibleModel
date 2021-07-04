@@ -14,28 +14,55 @@ def test_p_inverse():
     W = torch.rand(d, 200)
     y = X @ W
     error = ((y - X @ p_inverse(X) @ y)**2).max()
-    print(f"error: {error:.2E}", "passed" if error < 1e-8 else "not pass")
+    print(f"error: {error:.2E}, 'r2': {r_sq(X, y).item():.2f},",
+          "passed" if error < 1e-8 else "not pass")
 
-def linear_pred_loss(x, y):
+def cosine_loss(x, y):
     '''
     x: (n, d1)
     y: (n, d2)
-    return linear least square error from x to y
+    make sure columns of y is orthogonal to columns of x
+    
+    this is more efficient than r_sq b/c no inverse calculated
     '''
-    return ((y - x @ p_inverse(x) @ y)**2).sum()
+    x = x / torch.norm(x, dim=0)
+    y = y / torch.norm(y, dim=0)
+    return ((x.T @ y)**2).sum()
+    
+def r_sq(x, y, eps=1e-10):
+    '''
+    x: (n, d1)
+    y: (n, d2)
+    eps: avoid division by 0
+    return the R^2 = 1 - SS_res / SS_tot value of the linear fit
+    where SS_tot = sum((y-mean(y, 0))**2)
+    larger the more predictive
+    '''
+    b = torch.zeros(x.shape[0], 1)
+    x = torch.cat((x, b), 1) # add bias term
+    SS_res = ((y - x @ p_inverse(x) @ y)**2).sum()
+    SS_tot = ((y - y.mean(0))**2).sum() + eps
+    return 1 - SS_res / SS_tot
 
 if __name__ == '__main__':
 
     d_unknown = 200 # dimension of unknown concepts
-    d_concepts = 108 # dimension of known concepts
+    d_concepts = 2 # dimension of known concepts
+    # the problem with R2 is that bs need to be > d_concepts, ow. it is always 1
+    # because it is always exactly solvable; to salvage this, we may need to
+    # enforce that no random few features can predict the output;
+    # this can be alternatively implemented as orthongonality constraint
     bs = 32
 
     c = (torch.rand(bs, d_concepts) > 0.5).float()
-    u = torch.randn(bs, d) # unknown concepts
+    # W = torch.randn(d_concepts, d_unknown)
+    # u = c @ W
+    u = torch.randn(bs, d_unknown) # unknown concepts
     u.requires_grad = True
 
-    # use c to predict u linearly and get the l2 error
-    e = linear_pred_loss(c, u)
-    print(grad(e, u)[0].shape)
-
+    # use c to predict u and get r^2
+    r2 = r_sq(c, u)
+    print(f'r2 for this example (n={bs}, d_concepts={d_concepts}) is {r2:.2E}')
+    print(f'the gradient has shape {grad(r2, u)[0].shape}')
+    
     test_p_inverse()
