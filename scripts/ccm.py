@@ -1,5 +1,5 @@
 '''
-this files trains an sequential CBM
+this files trains an sequential or independent CBM
 '''
 import sys, os
 import tqdm
@@ -33,7 +33,7 @@ if RootPath not in sys.path: # parent directory
 from lib.models import MLP, LambdaNet, CCM, ConcatNet, CUB_Subset_Concept_Model
 from lib.data import small_CUB, CUB, SubColumn, CUB_train_transform, CUB_test_transform
 from lib.data import SubAttr
-from lib.train import train
+from lib.train import train, train_step_xyc
 from lib.eval import get_output, test, plot_log, shap_net_x, shap_ccm_c, bootstrap
 from lib.utils import birdfile2class, birdfile2idx, is_test_bird_idx, get_bird_bbox, get_bird_class, get_bird_part, get_part_location, get_multi_part_location, get_bird_name
 from lib.utils import get_attribute_name, code2certainty, get_class_attributes, get_image_attributes, describe_bird
@@ -45,6 +45,8 @@ def get_args():
                         help="where to save all the outputs")
     parser.add_argument("--eval", action="store_true",
                         help="whether or not to eval the learned model")
+    parser.add_argument("--ind", action="store_true",
+                        help="whether or not to train independent CCM")
     parser.add_argument("--retrain", action="store_true",
                         help="retrain using all train val data")
     parser.add_argument("--seed", type=int, default=42,
@@ -73,12 +75,15 @@ def get_args():
 
 def ccm(attr_names, concept_model_path,
         loader_xyc, loader_xyc_eval, loader_xyc_te, loader_xyc_val=None,
+        independent=False,
         n_epochs=10, report_every=1, lr_step=1000,
         u_model_path=None,
         device='cuda', savepath=None, use_aux=False):
     '''
     loader_xyc_eval is the evaluation of loader_xyc
     if loader_xyc_val: use early stopping, otherwise train for the number of epochs
+    
+    independent: whether or not to train ccm independently
     '''
     attr_full_names = get_attr_names(f"{RootPath}/outputs/concepts/concepts_108.txt")
     assert len(attr_full_names) == 108, "108 features required"
@@ -90,8 +95,11 @@ def ccm(attr_names, concept_model_path,
     # known concept model
     x2c = torch.load(f'{RootPath}/{concept_model_path}.pt')
     x2c.aux_logits = False
-    x2c = nn.Sequential(x2c, transition)
-
+    if independent:    
+        x2c = nn.Sequential(x2c, transition, nn.Sigmoid())
+    else:
+        x2c = nn.Sequential(x2c, transition)
+    
     # unknown concept model
     if u_model_path:
         x2u = torch.load(f'{RootPath}/{u_model_path}.pt')
@@ -118,13 +126,15 @@ def ccm(attr_names, concept_model_path,
     # + 0.1 * R_sq(c, o_u) # use c b/c o_c may not properly learned
     # make sure the 3 losses are at the same scale (is there a research question?)
     # and let dataset give x, y, c
-    criterion = lambda o, y: F.cross_entropy(o, y)
+    criterion = lambda o_y, y, o_c, c, o_u: F.cross_entropy(o_y, y)
     
     # train
     opt = optim.SGD(net.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0004)
     scheduler = lr_scheduler.StepLR(opt, step_size=lr_step)
     if loader_xyc_val:
         log = train(net, loader_xyc, opt, criterion=criterion,
+                    independent=independent,
+                    train_step=train_step_xyc,
                     n_epochs=n_epochs, report_every=report_every,
                     device=device, savepath=savepath,
                     report_dict={'val acc': (lambda m: test(m, loader_xyc_val,
@@ -138,6 +148,8 @@ def ccm(attr_names, concept_model_path,
                     scheduler=scheduler)
     else:
         log = train(net, loader_xyc, opt, criterion=criterion,
+                    independent=independent,                   
+                    train_step=train_step_xyc,                    
                     n_epochs=n_epochs, report_every=report_every,
                     device=device, savepath=savepath,
                     report_dict={'train acc': (lambda m: test(m, loader_xyc_eval,
@@ -214,6 +226,7 @@ if __name__ == '__main__':
         net = ccm(attr_names, flags.concept_model_path,
                   loader_xyc, loader_xyc_eval,
                   loader_xyc_te,
+                  independent=flags.ind,                                    
                   u_model_path = flags.u_model_path,
                   n_epochs=flags.n_epochs, report_every=1,
                   lr_step=flags.lr_step,
@@ -222,19 +235,9 @@ if __name__ == '__main__':
         net = ccm(attr_names, flags.concept_model_path,
                   loader_xyc, loader_xyc_eval,
                   loader_xyc_te, loader_xyc_val=loader_xyc_val,
+                  independent=flags.ind,                  
                   u_model_path = flags.u_model_path,                  
                   n_epochs=flags.n_epochs, report_every=1,
                   lr_step=flags.lr_step,
                   savepath=model_name, use_aux=flags.use_aux)
-        
-
-    '''
-    TODO: 
-    1. change loader_xy to loader_xyc (done)
-    2. check the order of concept is the same in concept_model.py (yes)
-    3. extract attr with subcolumn in loader (done)
-    4. use train_step_xyc
-    5. change criterion to take 4-5 inputs
-    6. add independent option ot the argument, use independent in cbm
-    '''
         
