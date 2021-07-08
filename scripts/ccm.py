@@ -38,6 +38,7 @@ from lib.eval import get_output, test, plot_log, shap_net_x, shap_ccm_c, bootstr
 from lib.utils import birdfile2class, birdfile2idx, is_test_bird_idx, get_bird_bbox, get_bird_class, get_bird_part, get_part_location, get_multi_part_location, get_bird_name
 from lib.utils import get_attribute_name, code2certainty, get_class_attributes, get_image_attributes, describe_bird
 from lib.utils import get_attr_names
+from lib.regularization import EYE
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -47,6 +48,8 @@ def get_args():
                         help="whether or not to eval the learned model")
     parser.add_argument("--ind", action="store_true",
                         help="whether or not to train independent CCM")
+    parser.add_argument("--alpha", default=0, type=float,
+                        help="regularization strength for EYE")
     parser.add_argument("--retrain", action="store_true",
                         help="retrain using all train val data")
     parser.add_argument("--seed", type=int, default=42,
@@ -78,6 +81,7 @@ def ccm(attr_names, concept_model_path,
         independent=False,
         n_epochs=10, report_every=1, lr_step=1000,
         u_model_path=None,
+        alpha=0, # regularizaiton strength
         device='cuda', savepath=None, use_aux=False):
     '''
     loader_xyc_eval is the evaluation of loader_xyc
@@ -126,7 +130,9 @@ def ccm(attr_names, concept_model_path,
     # + 0.1 * R_sq(c, o_u) # use c b/c o_c may not properly learned
     # make sure the 3 losses are at the same scale (is there a research question?)
     # and let dataset give x, y, c
-    criterion = lambda o_y, y, o_c, c, o_u: F.cross_entropy(o_y, y)
+    r = torch.cat([torch.ones(d_x2c), torch.zeros(d_x2u)]).to(device)
+    criterion = lambda o_y, y, o_c, c, o_u: F.cross_entropy(o_y, y) + \
+        alpha * EYE(r, net_y[1].weight.abs().sum(0))
     
     # train
     opt = optim.SGD(net.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0004)
@@ -226,7 +232,7 @@ if __name__ == '__main__':
         net = ccm(attr_names, flags.concept_model_path,
                   loader_xyc, loader_xyc_eval,
                   loader_xyc_te,
-                  independent=flags.ind,                                    
+                  independent=flags.ind, alpha=flags.alpha,
                   u_model_path = flags.u_model_path,
                   n_epochs=flags.n_epochs, report_every=1,
                   lr_step=flags.lr_step,
@@ -235,7 +241,7 @@ if __name__ == '__main__':
         net = ccm(attr_names, flags.concept_model_path,
                   loader_xyc, loader_xyc_eval,
                   loader_xyc_te, loader_xyc_val=loader_xyc_val,
-                  independent=flags.ind,                  
+                  independent=flags.ind, alpha=flags.alpha,
                   u_model_path = flags.u_model_path,                  
                   n_epochs=flags.n_epochs, report_every=1,
                   lr_step=flags.lr_step,
