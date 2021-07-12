@@ -1,5 +1,5 @@
 '''
-this file trains a standard model
+this file trains a standard model to either train (x, y) or (x, shortcut)
 '''
 import sys, os
 import tqdm
@@ -32,10 +32,13 @@ if RootPath not in sys.path: # parent directory
     sys.path = [RootPath] + sys.path
 from lib.models import MLP
 from lib.data import small_CUB, CUB, SubColumn, CUB_train_transform, CUB_test_transform
+from lib.data import CUB_shortcut_transform
 from lib.train import train
 from lib.eval import get_output, test, plot_log, shap_net_x, shap_ccm_c, bootstrap
-from lib.utils import birdfile2class, birdfile2idx, is_test_bird_idx, get_bird_bbox, get_bird_class, get_bird_part, get_part_location, get_multi_part_location, get_bird_name
-from lib.utils import get_attribute_name, code2certainty, get_class_attributes, get_image_attributes, describe_bird
+from lib.utils import birdfile2class, birdfile2idx, is_test_bird_idx, describe_bird
+from lib.utils import get_bird_bbox, get_bird_class, get_bird_part, get_part_location
+from lib.utils import get_multi_part_location, get_bird_name, get_image_attributes
+from lib.utils import get_attribute_name, code2certainty, get_class_attributes
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -49,6 +52,12 @@ def get_args():
                         help="seed for reproducibility")
     parser.add_argument("--transform", default="cbm",
                         help="transform mode to use")
+    parser.add_argument("-s", "--shortcut", default="clean",
+                        help="shortcut transform to use")
+    parser.add_argument("-t", "--threshold", default=0, type=float,
+                        help="shortcut threshold to use (1 always Y dependent, 0 ind)")
+    parser.add_argument("--n_shortcuts", default=10, type=int,
+                        help="number of shortcuts")
     parser.add_argument("--lr_step", type=int, default=1000,
                         help="learning rate decay steps")
     parser.add_argument("--n_epochs", type=int, default=100,
@@ -142,15 +151,34 @@ if __name__ == '__main__':
     # accuracy
     acc_criterion = lambda o, y: (o.argmax(1) == y).float()
 
+    shortcut = lambda d: CUB_shortcut_transform(d,
+                                                mode=flags.shortcut,
+                                                threshold=flags.threshold,
+                                                n_shortcuts=flags.n_shortcuts)
     # dataset
-    loader_xy = DataLoader(SubColumn(cub_train, ['x', 'y']), batch_size=32,
-                           shuffle=True, num_workers=8)
-    loader_xy_val = DataLoader(SubColumn(cub_val, ['x', 'y']), batch_size=32,
-                               shuffle=False, num_workers=8)
-    loader_xy_te = DataLoader(SubColumn(cub_test, ['x', 'y']), batch_size=32,
-                              shuffle=False, num_workers=8)
-    loader_xy_eval = DataLoader(SubColumn(cub_train_eval, ['x', 'y']), batch_size=32,
-                                shuffle=True, num_workers=8)
+    if flags.shortcut == 'clean':
+        loader_xy = DataLoader(SubColumn(cub_train, ['x', 'y']), batch_size=32,
+                               shuffle=True, num_workers=8)
+        loader_xy_val = DataLoader(SubColumn(cub_val, ['x', 'y']), batch_size=32,
+                                   shuffle=False, num_workers=8)
+        loader_xy_te = DataLoader(SubColumn(cub_test, ['x', 'y']), batch_size=32,
+                                  shuffle=False, num_workers=8)
+        loader_xy_eval = DataLoader(SubColumn(cub_train_eval, ['x', 'y']),
+                                    batch_size=32,
+                                    shuffle=True, num_workers=8)
+    else:
+        loader_xy = DataLoader(SubColumn(shortcut(cub_train),
+                                         ['x', 's']), batch_size=32,
+                               shuffle=True, num_workers=8)
+        loader_xy_val = DataLoader(SubColumn(shortcut(cub_val),
+                                             ['x', 's']), batch_size=32,
+                                   shuffle=False, num_workers=8)
+        loader_xy_te = DataLoader(SubColumn(shortcut(cub_test),
+                                            ['x', 's']), batch_size=32,
+                                  shuffle=False, num_workers=8)
+        loader_xy_eval = DataLoader(SubColumn(shortcut(cub_train_eval),
+                                              ['x', 's']), batch_size=32,
+                                    shuffle=True, num_workers=8)
 
     print(f"# train: {len(cub_train)}, # val: {len(cub_val)}, # test: {len(cub_test)}")
 
@@ -163,10 +191,20 @@ if __name__ == '__main__':
                                         mode=flags.transform)
         cub_train_eval = CUB_test_transform(Subset(cub, train_val_indices),
                                         mode=flags.transform)
-        loader_xy = DataLoader(SubColumn(cub_train, ['x', 'y']), batch_size=32,
-                               shuffle=True, num_workers=8)
-        loader_xy_eval = DataLoader(SubColumn(cub_train_eval, ['x', 'y']), batch_size=32,
-                                    shuffle=True, num_workers=8)
+        if flags.shortcut == 'clean':
+            loader_xy = DataLoader(SubColumn(cub_train, ['x', 'y']), batch_size=32,
+                                   shuffle=True, num_workers=8)
+            loader_xy_eval = DataLoader(SubColumn(cub_train_eval, ['x', 'y']),
+                                        batch_size=32,
+                                        shuffle=True, num_workers=8)
+        else:
+            loader_xy = DataLoader(SubColumn(shortcut(cub_train),
+                                             ['x', 's']), batch_size=32,
+                                   shuffle=True, num_workers=8)
+            loader_xy_eval = DataLoader(SubColumn(shortcut(cub_train_eval),
+                                                  ['x', 's']), batch_size=32,
+                                        shuffle=True, num_workers=8)
+            
         net = standard_model(loader_xy, loader_xy_eval,
                              loader_xy_te,
                              n_epochs=flags.n_epochs, report_every=1,

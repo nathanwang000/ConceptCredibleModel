@@ -182,31 +182,40 @@ def CUB_test_transform(dataset, mode="cbm"):
         
     return TransformWrapper(dataset, x_transform(transform))
 
-def class_dependent_noise_transform(d, n_classes, sigma_max=0.1, threshold=1):
+def class_dependent_noise_transform(d, n_shortcuts, sigma_max=0.1, threshold=0,
+                                    shortcut_level=None):
     '''
     d: single dataset instance e.g. dataset[idx]
-    n_classes: number of classes
+    n_shortcuts: number of shortcut classes
     sigma_max: max noise scale, threshold: before independent noise
+    shortcut_level: manual shortcut level for debug
     '''
     assert 0 <= threshold <= 1, "threshold should be in [0, 1]"
+    assert n_shortcuts <= 200, "shortcut classes <= 200"
+    sigmas = torch.linspace(0, sigma_max, n_shortcuts)
     z = torch.rand(1)
-    if z < threshold:
-        sigma = (d['y'] + 1) / n_classes * sigma_max
-    else:
-        sigma = torch.rand(1) * sigma_max
+    if shortcut_level is None:
+        if z < threshold:
+            shortcut_level = d['y'] % n_shortcuts
+        else:
+            shortcut_level = np.random.choice(n_shortcuts)
+    sigma = sigmas[shortcut_level]
     d['x'] = d['x'] + sigma * torch.randn(d['x'].shape)
-    d['sigma'] = sigma
+    d['s'] = shortcut_level
     return d
 
-def CUB_shortcut_transform(dataset, mode="clean"):
+def CUB_shortcut_transform(dataset, mode="clean", threshold=0, n_shortcuts=200):
     '''
-    transform shortcut for CUB; TODO
+    transform shortcut for CUB
     '''
     if mode == 'clean': # without shortcut
         transform = lambda d: d
-    else:
+    elif mode == 'noise':
         def transform(d):
-            return class_dependent_noise_transform(d, 200) # bird has 200 classes
+            return class_dependent_noise_transform(d, n_shortcuts=n_shortcuts,
+                                                   threshold=threshold)
+    else:
+        raise Exception("not recognizable shortcut name")
         
     return TransformWrapper(dataset, transform)
     
