@@ -33,6 +33,7 @@ class SubColumn(Dataset):
 class TransformWrapper(Dataset):
     '''
     add transformation on the dataset (useful for different transformation for train test)
+    this is a internal wrapper meant only for this file
     '''
 
     def __init__(self, dataset, transform):
@@ -44,7 +45,7 @@ class TransformWrapper(Dataset):
 
     def __getitem__(self, idx):
         d = self.dataset[idx]
-        d['x'] = self.transform(d['x'])
+        d = self.transform(d)
         return d
 
 class LearnedAttrWrapper(Dataset):
@@ -103,12 +104,24 @@ class SubAttr(Dataset):
             d['attr'] = d['attr'][self.attr_indices].long()
         return d
 
+def x_transform(transform):
+    '''
+    d is a dataset instance: e.g. datset[idx]
+    applies transform on d['x'] and returns d
+    '''
+    def _transform(d):
+        d['x'] = transform(d['x'])
+        return d
+    
+    return _transform
+
 def CUB_train_transform(dataset, mode="cbm"):
     '''
     transform dataset according to the CBM paper
     mode: cbm or custom
     '''
     resol = 299
+    # input transform
     if mode == "cbm":
         transform = transforms.Compose([
             transforms.ColorJitter(brightness=32/255, saturation=(0.5, 1.5)),
@@ -133,8 +146,6 @@ def CUB_train_transform(dataset, mode="cbm"):
             ])
     elif mode == 'flip':
         transform = transforms.Compose([
-            # transforms.ColorJitter(brightness=32/255, saturation=(0.5, 1.5)),
-            # transforms.RandomResizedCrop(resol),
             transforms.CenterCrop(299), # this makes sure it is centered
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(), #implicitly divides by 255
@@ -142,14 +153,13 @@ def CUB_train_transform(dataset, mode="cbm"):
         ])
     elif mode == 'crop':
         transform = transforms.Compose([
-            # transforms.ColorJitter(brightness=32/255, saturation=(0.5, 1.5)),
             transforms.RandomResizedCrop(resol),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(), #implicitly divides by 255
             transforms.Normalize(mean = [0.5, 0.5, 0.5], std = [2, 2, 2])
         ])
     
-    return TransformWrapper(dataset, transform)
+    return TransformWrapper(dataset, x_transform(transform))
 
 def CUB_test_transform(dataset, mode="cbm"):
     '''
@@ -170,9 +180,36 @@ def CUB_test_transform(dataset, mode="cbm"):
             transforms.Normalize(mean = [0.5, 0.5, 0.5], std = [2, 2, 2])
             ])
         
-     
-    return TransformWrapper(dataset, transform)
+    return TransformWrapper(dataset, x_transform(transform))
 
+def class_dependent_noise_transform(d, n_classes, sigma_max=0.1, threshold=1):
+    '''
+    d: single dataset instance e.g. dataset[idx]
+    n_classes: number of classes
+    sigma_max: max noise scale, threshold: before independent noise
+    '''
+    assert 0 <= threshold <= 1, "threshold should be in [0, 1]"
+    z = torch.rand(1)
+    if z < threshold:
+        sigma = (d['y'] + 1) / n_classes * sigma_max
+    else:
+        sigma = torch.rand(1) * sigma_max
+    d['x'] = d['x'] + sigma * torch.randn(d['x'].shape)
+    d['sigma'] = sigma
+    return d
+
+def CUB_shortcut_transform(dataset, mode="clean"):
+    '''
+    transform shortcut for CUB; TODO
+    '''
+    if mode == 'clean': # without shortcut
+        transform = lambda d: d
+    else:
+        def transform(d):
+            return class_dependent_noise_transform(d, 200) # bird has 200 classes
+        
+    return TransformWrapper(dataset, transform)
+    
 class small_CUB(Dataset):
     '''
     small CUB dataset just for thesis proposal

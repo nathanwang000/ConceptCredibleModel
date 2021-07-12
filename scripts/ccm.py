@@ -124,7 +124,7 @@ def ccm(attr_names, concept_model_path,
     print('task acc before training: {:.1f}%'.format(test(net, loader_xyc_te,
                                                           acc_criterion,
                                                           device=device) * 100))
-    # todo: add regularization to both u and c
+    # add regularization to both u and c
     # lambda o, y, o_c, c, o_u:
     # F.cross_entropy(o, y) + 0.1 * (grad(o[y], o_u, create_graph=True)**2).sum()
     # + 0.1 * R_sq(c, o_u) # use c b/c o_c may not properly learned

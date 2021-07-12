@@ -51,6 +51,9 @@ def get_args():
                         help="no outputs dir used")
     parser.add_argument("-l", "--report_level", default=1, type=int,
                         help="max report level")
+    parser.add_argument("--txt", action='store_true',
+                        help="output text instead of pipe through less")
+    
     args = parser.parse_args()
     return args
 
@@ -124,7 +127,8 @@ if __name__ == "__main__":
                 o_dir = flags.command[1]
 
         if len(flags.command) == 2 and \
-           flags.command[1].split('/')[-1] not in ["", ".", '..']:
+           (flags.command[1].split('/')[-1] not in ["", ".", '..'] or \
+            flags.message != ""):
             # show specific tid            
             tid = flags.command[1].split('/')[-1]
             track_log = f"{o_dir}/{tid}/track.log"            
@@ -137,10 +141,17 @@ if __name__ == "__main__":
 
             record['children'] = gather_log(f"{o_dir}/{tid}",
                                             max_level=flags.report_level)
-            print(gen_report([record]))
+
+            message = gen_report([record])
         else:
             records = gather_log(o_dir, max_level=flags.report_level)
-            print(gen_report(records))
+            message = gen_report(records)
+
+        if flags.txt:
+            print(message)
+        else:
+            message = message.replace("%", "%%")
+            os.system(f"printf '{message}' | less")            
 
     else: # run the command        
         
@@ -153,8 +164,10 @@ if __name__ == "__main__":
             tid1, tid = flags.command[1], flags.command[2]
             track_log = f"{tid1}/track.log"
             record = torch.load(f"{tid1}/track.log")
-            record['tid'] = tid.split("/")[-1]
-            torch.save(record, track_log)
+            if not os.path.isdir(tid1):
+                # update tid if name is changed
+                record['tid'] = tid.split("/")[-1]
+                torch.save(record, track_log)
             os.system(f"mv {tid1} {tid}")
             exit(0)
         else:
