@@ -32,7 +32,7 @@ if RootPath not in sys.path: # parent directory
     sys.path = [RootPath] + sys.path
 from lib.models import MLP, CUB_Subset_Concept_Model, CBM, LambdaNet
 from lib.data import small_CUB, CUB, SubColumn, CUB_train_transform, CUB_test_transform
-from lib.data import SubAttr
+from lib.data import SubAttr, CUB_shortcut_transform
 from lib.train import train, train_step_xyc
 from lib.eval import get_output, test, plot_log, shap_net_x, shap_ccm_c, bootstrap
 from lib.utils import birdfile2class, birdfile2idx, is_test_bird_idx, get_bird_bbox, get_bird_class, get_bird_part, get_part_location, get_multi_part_location, get_bird_name
@@ -59,12 +59,19 @@ def get_args():
                         help="max number of epochs to train")
     parser.add_argument("--use_aux", action="store_true",
                         help="auxilliary loss for inception")
-    parser.add_argument("--concept_model_path", type=str,
+    parser.add_argument("--c_model_path", type=str,
                         default="gold_models/flip/concepts",
                         help="concept model path starting from root (ignore .pt)")
     parser.add_argument("--concept_path", type=str,
                         default="outputs/concepts/concepts_108.txt",
                         help="path to file containing concept names")
+    # shortcut related
+    parser.add_argument("-s", "--shortcut", default="clean",
+                        help="shortcut transform to use")
+    parser.add_argument("-t", "--threshold", default=1.0, type=float,
+                        help="shortcut threshold to use (1 always Y dependent, 0 ind)")
+    parser.add_argument("--n_shortcuts", default=10, type=int,
+                        help="number of shortcuts")
     
     args = parser.parse_args()
     print(args)
@@ -174,19 +181,18 @@ if __name__ == '__main__':
     acc_criterion = lambda o, y: (o.argmax(1) == y).float()
 
     # dataset
-    loader_xyc = DataLoader(SubColumn(SubAttr(cub_train, attr_names),
-                                      ['x', 'y', 'attr']), batch_size=32,
-                           shuffle=True, num_workers=8)
-    loader_xyc_val = DataLoader(SubColumn(SubAttr(cub_val, attr_names),
-                                          ['x', 'y', 'attr']), batch_size=32,
-                               shuffle=False, num_workers=8)
-    loader_xyc_te = DataLoader(SubColumn(SubAttr(cub_test, attr_names),
-                                         ['x', 'y', 'attr']), batch_size=32,
-                              shuffle=False, num_workers=8)
-    loader_xyc_eval = DataLoader(SubColumn(SubAttr(cub_train_eval, attr_names),
-                                           ['x', 'y', 'attr']), batch_size=32,
-                                shuffle=True, num_workers=8)
-
+    shortcut = lambda d: CUB_shortcut_transform(d,
+                                                mode=flags.shortcut,
+                                                threshold=flags.threshold,
+                                                n_shortcuts=flags.n_shortcuts)
+    subcolumn = lambda d: SubColumn(SubAttr(d, attr_names), ['x', 'y', 'attr'])
+    load = lambda d, shuffle: DataLoader(subcolumn(shortcut(d)), batch_size=32,
+                                shuffle=shuffle, num_workers=8)
+    loader_xyc = load(cub_train, True)
+    loader_xyc_val = load(cub_val, False)
+    loader_xyc_te = load(cub_test, False)
+    loader_xyc_eval = load(cub_train_eval, False)
+    
     print(f"# train: {len(cub_train)}, # val: {len(cub_val)}, # test: {len(cub_test)}")
 
     if flags.eval:
@@ -198,13 +204,10 @@ if __name__ == '__main__':
                                         mode=flags.transform)
         cub_train_eval = CUB_test_transform(Subset(cub, train_val_indices),
                                              mode=flags.transform)
-        loader_xyc = DataLoader(SubColumn(SubAttr(cub_train, attr_names),
-                                          ['x', 'y', 'attr']), batch_size=32,
-                               shuffle=True, num_workers=8)
-        loader_xyc_eval = DataLoader(SubColumn(SubAttr(cub_train_eval, attr_names),
-                                               ['x', 'y', 'attr']), batch_size=32,
-                                    shuffle=True, num_workers=8)
-        net = cbm(attr_names, flags.concept_model_path,
+        loader_xyc = load(cub_train, True)
+        loader_xyc_eval = load(cub_train_eval, False)
+
+        net = cbm(attr_names, flags.c_model_path,
                   loader_xyc, loader_xyc_eval,
                   loader_xyc_te,
                   n_epochs=flags.n_epochs, report_every=1,
@@ -212,7 +215,7 @@ if __name__ == '__main__':
                   savepath=model_name, use_aux=flags.use_aux,
                   independent=flags.ind)
     else:
-        net = cbm(attr_names, flags.concept_model_path,
+        net = cbm(attr_names, flags.c_model_path,
                   loader_xyc, loader_xyc_eval,
                   loader_xyc_te, loader_xyc_val=loader_xyc_val,
                   n_epochs=flags.n_epochs, report_every=1,
