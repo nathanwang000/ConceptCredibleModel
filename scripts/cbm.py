@@ -60,7 +60,7 @@ def get_args():
     parser.add_argument("--use_aux", action="store_true",
                         help="auxilliary loss for inception")
     parser.add_argument("--concept_model_path", type=str,
-                        default="gold_models/concepts_flip",
+                        default="gold_models/flip/concepts",
                         help="concept model path starting from root (ignore .pt)")
     parser.add_argument("--concept_path", type=str,
                         default="outputs/concepts/concepts_108.txt",
