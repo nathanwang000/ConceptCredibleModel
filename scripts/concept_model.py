@@ -32,11 +32,13 @@ if RootPath not in sys.path: # parent directory
     sys.path = [RootPath] + sys.path
 from lib.models import MLP
 from lib.data import small_CUB, CUB, SubColumn, CUB_train_transform, CUB_test_transform
-from lib.data import SubAttr
+from lib.data import SubAttr, CUB_shortcut_transform
 from lib.train import train
 from lib.eval import get_output, test, plot_log, shap_net_x, shap_ccm_c, bootstrap
-from lib.utils import birdfile2class, birdfile2idx, is_test_bird_idx, get_bird_bbox, get_bird_class, get_bird_part, get_part_location, get_multi_part_location, get_bird_name
-from lib.utils import get_attribute_name, code2certainty, get_class_attributes, get_image_attributes, describe_bird
+from lib.utils import birdfile2class, birdfile2idx, is_test_bird_idx, get_bird_name
+from lib.utils import get_bird_bbox, get_bird_class, get_bird_part, get_part_location
+from lib.utils import get_multi_part_location, get_image_attributes, describe_bird
+from lib.utils import get_attribute_name, code2certainty, get_class_attributes
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -56,6 +58,13 @@ def get_args():
                         help="max number of epochs to train")
     parser.add_argument("--use_aux", action="store_true",
                         help="auxilliary loss for inception")
+    # shortcut related
+    parser.add_argument("-s", "--shortcut", default="clean",
+                        help="shortcut transform to use")
+    parser.add_argument("-t", "--threshold", default=1.0, type=float,
+                        help="shortcut threshold to use (1 always Y dependent, 0 ind)")
+    parser.add_argument("--n_shortcuts", default=10, type=int,
+                        help="number of shortcuts")
     
     args = parser.parse_args()
     print(args)
@@ -168,19 +177,18 @@ if __name__ == '__main__':
     # reported to be 9:1, we have 7.5:1    
     print('mean imbalance ratio is', imbalance_ratio.mean().item()) 
 
-    # dataloader
-    loader_xy = DataLoader(SubColumn(SubAttr(cub_train, ind_maj_attr),
-                                     ['x', 'attr']), batch_size=32,
-                           shuffle=True, num_workers=8)
-    loader_xy_val = DataLoader(SubColumn(SubAttr(cub_val, ind_maj_attr),
-                                         ['x', 'attr']), batch_size=32,
-                               shuffle=False, num_workers=8)
-    loader_xy_te = DataLoader(SubColumn(SubAttr(cub_test, ind_maj_attr),
-                                        ['x', 'attr']), batch_size=32,
-                              shuffle=False, num_workers=8)
-    loader_xy_eval = DataLoader(SubColumn(SubAttr(cub_train_eval, ind_maj_attr),
-                                          ['x', 'attr']), batch_size=32,
-                                shuffle=True, num_workers=8)
+    # dataset
+    shortcut = lambda d: CUB_shortcut_transform(d,
+                                                mode=flags.shortcut,
+                                                threshold=flags.threshold,
+                                                n_shortcuts=flags.n_shortcuts)
+    subcolumn = lambda d: SubColumn(SubAttr(d, ind_maj_attr), ['x', 'attr'])
+    load = lambda d, shuffle: DataLoader(subcolumn(shortcut(d)), batch_size=32,
+                                shuffle=shuffle, num_workers=8)
+    loader_xy = load(cub_train, True)
+    loader_xy_val = load(cub_val, False)
+    loader_xy_te = load(cub_test, False)
+    loader_xy_eval = load(cub_train_eval, False)
 
     print(f"# train: {len(cub_train)}, # val: {len(cub_val)}, # test: {len(cub_test)}")
 
@@ -193,12 +201,9 @@ if __name__ == '__main__':
                                         mode=flags.transform)
         cub_train_eval = CUB_test_transform(Subset(cub, train_val_indices),
                                             mode=flags.transform)
-        loader_xy = DataLoader(SubColumn(SubAttr(cub_train, ind_maj_attr),
-                                         ['x', 'attr']), batch_size=32,
-                               shuffle=True, num_workers=8)
-        loader_xy_eval = DataLoader(SubColumn(SubAttr(cub_train_eval, ind_maj_attr),
-                                              ['x', 'attr']), batch_size=32,
-                                    shuffle=True, num_workers=8)
+        loader_xy = load(cub_train, True)
+        loader_xy_eval = load(cub_train_eval, False)
+        
         net = concept_model(len(ind_maj_attr), loader_xy, loader_xy_eval,
                             loader_xy_te,
                             n_epochs=flags.n_epochs, report_every=1,

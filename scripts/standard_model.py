@@ -52,14 +52,16 @@ def get_args():
                         help="seed for reproducibility")
     parser.add_argument("--transform", default="cbm",
                         help="transform mode to use")
+    # shortcut related
     parser.add_argument("--predict_shortcut", action="store_true",
-                        help="do shortcut prediction")
+                        help="do shortcut prediction (o.w. predict y)")
     parser.add_argument("-s", "--shortcut", default="clean",
                         help="shortcut transform to use")
     parser.add_argument("-t", "--threshold", default=0, type=float,
                         help="shortcut threshold to use (1 always Y dependent, 0 ind)")
-    parser.add_argument("--n_shortcuts", default=5, type=int,
+    parser.add_argument("--n_shortcuts", default=10, type=int,
                         help="number of shortcuts")
+    # other training stuff
     parser.add_argument("--lr_step", type=int, default=15,
                         help="learning rate decay steps")
     parser.add_argument("--n_epochs", type=int, default=100,
