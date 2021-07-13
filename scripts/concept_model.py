@@ -166,7 +166,7 @@ if __name__ == '__main__':
     # find imbalance ratio
     imbalance_ratio = calc_imbalance(SubAttr(cub_train, ind_maj_attr))
     # reported to be 9:1, we have 7.5:1    
-    print('mean imalance ratio is', imbalance_ratio.mean().item()) 
+    print('mean imbalance ratio is', imbalance_ratio.mean().item()) 
 
     # dataloader
     loader_xy = DataLoader(SubColumn(SubAttr(cub_train, ind_maj_attr),

@@ -52,13 +52,15 @@ def get_args():
                         help="seed for reproducibility")
     parser.add_argument("--transform", default="cbm",
                         help="transform mode to use")
+    parser.add_argument("--predict_shortcut", action="store_true",
+                        help="do shortcut prediction")
     parser.add_argument("-s", "--shortcut", default="clean",
                         help="shortcut transform to use")
     parser.add_argument("-t", "--threshold", default=0, type=float,
                         help="shortcut threshold to use (1 always Y dependent, 0 ind)")
-    parser.add_argument("--n_shortcuts", default=10, type=int,
+    parser.add_argument("--n_shortcuts", default=5, type=int,
                         help="number of shortcuts")
-    parser.add_argument("--lr_step", type=int, default=1000,
+    parser.add_argument("--lr_step", type=int, default=15,
                         help="learning rate decay steps")
     parser.add_argument("--n_epochs", type=int, default=100,
                         help="max number of epochs to train")
@@ -151,35 +153,23 @@ if __name__ == '__main__':
     # accuracy
     acc_criterion = lambda o, y: (o.argmax(1) == y).float()
 
+    # dataset    
     shortcut = lambda d: CUB_shortcut_transform(d,
                                                 mode=flags.shortcut,
                                                 threshold=flags.threshold,
                                                 n_shortcuts=flags.n_shortcuts)
-    # dataset
-    if flags.shortcut == 'clean':
-        loader_xy = DataLoader(SubColumn(cub_train, ['x', 'y']), batch_size=32,
-                               shuffle=True, num_workers=8)
-        loader_xy_val = DataLoader(SubColumn(cub_val, ['x', 'y']), batch_size=32,
-                                   shuffle=False, num_workers=8)
-        loader_xy_te = DataLoader(SubColumn(cub_test, ['x', 'y']), batch_size=32,
-                                  shuffle=False, num_workers=8)
-        loader_xy_eval = DataLoader(SubColumn(cub_train_eval, ['x', 'y']),
-                                    batch_size=32,
-                                    shuffle=True, num_workers=8)
+    if flags.predict_shortcut:
+        subcolumn = lambda d: SubColumn(d, ['x', 's'])
     else:
-        loader_xy = DataLoader(SubColumn(shortcut(cub_train),
-                                         ['x', 's']), batch_size=32,
-                               shuffle=True, num_workers=8)
-        loader_xy_val = DataLoader(SubColumn(shortcut(cub_val),
-                                             ['x', 's']), batch_size=32,
-                                   shuffle=False, num_workers=8)
-        loader_xy_te = DataLoader(SubColumn(shortcut(cub_test),
-                                            ['x', 's']), batch_size=32,
-                                  shuffle=False, num_workers=8)
-        loader_xy_eval = DataLoader(SubColumn(shortcut(cub_train_eval),
-                                              ['x', 's']), batch_size=32,
-                                    shuffle=True, num_workers=8)
+        subcolumn = lambda d: SubColumn(d, ['x', 'y'])
 
+    load = lambda d, shuffle: DataLoader(subcolumn(shortcut(d)), batch_size=32,
+                                shuffle=shuffle, num_workers=8)
+    loader_xy = load(cub_train, True)
+    loader_xy_val = load(cub_val, False)
+    loader_xy_te = load(cub_test, False)
+    loader_xy_eval = load(cub_train_eval, False)
+    
     print(f"# train: {len(cub_train)}, # val: {len(cub_val)}, # test: {len(cub_test)}")
 
     if flags.eval:
@@ -191,19 +181,8 @@ if __name__ == '__main__':
                                         mode=flags.transform)
         cub_train_eval = CUB_test_transform(Subset(cub, train_val_indices),
                                         mode=flags.transform)
-        if flags.shortcut == 'clean':
-            loader_xy = DataLoader(SubColumn(cub_train, ['x', 'y']), batch_size=32,
-                                   shuffle=True, num_workers=8)
-            loader_xy_eval = DataLoader(SubColumn(cub_train_eval, ['x', 'y']),
-                                        batch_size=32,
-                                        shuffle=True, num_workers=8)
-        else:
-            loader_xy = DataLoader(SubColumn(shortcut(cub_train),
-                                             ['x', 's']), batch_size=32,
-                                   shuffle=True, num_workers=8)
-            loader_xy_eval = DataLoader(SubColumn(shortcut(cub_train_eval),
-                                                  ['x', 's']), batch_size=32,
-                                        shuffle=True, num_workers=8)
+        loader_xy = load(cub_train, True)
+        loader_xy_eval = load(cub_train_eval, False)
             
         net = standard_model(loader_xy, loader_xy_eval,
                              loader_xy_te,
