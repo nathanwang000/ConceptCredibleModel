@@ -18,6 +18,7 @@ sympy = "*"
 graphviz = "*"
 seaborn = "*"
 scikit-learn-extra = "*"
+sh = "*"
 
 [requires]
 python_version = "3.7"
