@@ -214,7 +214,7 @@ def CUB_shortcut_transform(dataset, mode="clean", threshold=0, n_shortcuts=200):
         def transform(d):
             return class_dependent_noise_transform(d, n_shortcuts=n_shortcuts,
                                                    threshold=threshold)
-    else:
+    else: # todo: shortcut path
         raise Exception("not recognizable shortcut name")
         
     return TransformWrapper(dataset, transform)

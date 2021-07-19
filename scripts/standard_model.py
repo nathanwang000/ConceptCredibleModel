@@ -56,7 +56,7 @@ def get_args():
     parser.add_argument("--predict_shortcut", action="store_true",
                         help="do shortcut prediction (o.w. predict y)")
     parser.add_argument("-s", "--shortcut", default="clean",
-                        help="shortcut transform to use")
+                        help="shortcut transform to use; clean: no shortcut; noise: shortcut dependent on y; else: shortcut dependent on yhat computed from the model path")
     parser.add_argument("-t", "--threshold", default=0, type=float,
                         help="shortcut threshold to use (1 always Y dependent, 0 ind)")
     parser.add_argument("--n_shortcuts", default=10, type=int,
