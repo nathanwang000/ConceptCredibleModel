@@ -83,9 +83,9 @@ def binary_sigmoid(x):
     '''
     return (torch.sigmoid(x) > 0.5).float()
 
-def cbm(attr_names, concept_model_path,
+def cbm(flags, attr_names, concept_model_path,
         loader_xyc, loader_xyc_eval, loader_xyc_te, loader_xyc_val=None,
-        n_epochs=10, report_every=1, lr_step=1000,
+        n_epochs=10, report_every=1, lr_step=1000, net_s=None,
         independent=False,
         device='cuda', savepath=None, use_aux=False):
     '''
@@ -119,35 +119,36 @@ def cbm(attr_names, concept_model_path,
     # train
     opt = optim.SGD(net.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0004)
     scheduler = lr_scheduler.StepLR(opt, step_size=lr_step)
+
+    run_train = lambda **kwargs: train(net, loader_xyc, opt, criterion=criterion,
+                                       train_step=train_step_xyc,
+                                       shortcut_mode = flags.shortcut,
+                                       shortcut_threshold = flags.threshold,
+                                       n_shortcuts = flags.n_shortcuts,
+                                       net_shortcut = net_s,
+                                       independent=independent,
+                                       n_epochs=n_epochs, report_every=report_every,
+                                       device=device, savepath=savepath,
+                                       scheduler=scheduler, **kwargs)
     if loader_xyc_val:
-        log = train(net, loader_xyc, opt, criterion=criterion,
-                    train_step=train_step_xyc,
-                    independent=independent,
-                    n_epochs=n_epochs, report_every=report_every,
-                    device=device, savepath=savepath,
-                    report_dict={'val acc': (lambda m: test(m, loader_xyc_val,
-                                                            acc_criterion,
-                                                            device=device) * 100, 'max'),
-                                 'train acc': (lambda m: test(m, loader_xyc_eval,
-                                                              acc_criterion,
-                                                              device=device) * 100,
-                                               'max')},
-                    early_stop_metric='val acc',
-                    scheduler=scheduler)
+        log = run_train(
+            report_dict={'val acc': (lambda m: test(m, loader_xyc_val,
+                                                    acc_criterion,
+                                                    device=device) * 100, 'max'),
+                         'train acc': (lambda m: test(m, loader_xyc_eval,
+                                                      acc_criterion,
+                                                      device=device) * 100, 'max')},
+            early_stop_metric='val acc')
+
     else:
-        log = train(net, loader_xyc, opt, criterion=criterion,
-                    train_step=train_step_xyc,
-                    independent=independent,                    
-                    n_epochs=n_epochs, report_every=report_every,
-                    device=device, savepath=savepath,
-                    report_dict={'train acc': (lambda m: test(m, loader_xyc_eval,
-                                                            acc_criterion,
-                                                            device=device) * 100, 'max'),
-                                 'test acc': (lambda m: test(m, loader_xyc_te,
-                                                              acc_criterion,
-                                                              device=device) * 100,
-                                               'max')},
-                    scheduler=scheduler)
+         log = run_train(
+             report_dict={'train acc': (lambda m: test(m, loader_xyc_eval,
+                                                       acc_criterion,
+                                                       device=device) * 100, 'max'),
+                          'test acc': (lambda m: test(m, loader_xyc_te,
+                                                      acc_criterion,
+                                                      device=device) * 100, 'max')})
+
 
     print('task acc after training: {:.1f}%'.format(test(net, loader_xyc_te,
                                                          acc_criterion,
@@ -181,12 +182,8 @@ if __name__ == '__main__':
     acc_criterion = lambda o, y: (o.argmax(1) == y).float()
 
     # dataset
-    shortcut = lambda d: CUB_shortcut_transform(d,
-                                                mode=flags.shortcut,
-                                                threshold=flags.threshold,
-                                                n_shortcuts=flags.n_shortcuts)
     subcolumn = lambda d: SubColumn(SubAttr(d, attr_names), ['x', 'y', 'attr'])
-    load = lambda d, shuffle: DataLoader(subcolumn(shortcut(d)), batch_size=32,
+    load = lambda d, shuffle: DataLoader(subcolumn(d), batch_size=32,
                                 shuffle=shuffle, num_workers=8)
     loader_xyc = load(cub_train, True)
     loader_xyc_val = load(cub_val, False)
@@ -195,10 +192,31 @@ if __name__ == '__main__':
     
     print(f"# train: {len(cub_train)}, # val: {len(cub_val)}, # test: {len(cub_test)}")
 
+    run_train = lambda **kwargs: cbm(
+        flags, attr_names, flags.c_model_path,
+        loader_xyc, loader_xyc_eval,
+        loader_xyc_te,
+        n_epochs=flags.n_epochs, report_every=1,
+        lr_step=flags.lr_step,
+        savepath=model_name, use_aux=flags.use_aux,
+        independent=flags.ind, **kwargs)
+
+    if flags.shortcut not in ['clean', 'noise']:
+        net_s = torch.load(flags.shortcut)
+    else:
+        net_s = None
+    
     if flags.eval:
         print('task acc after training: {:.1f}%'.format(
             test(torch.load(f'{model_name}.pt'),
-                 loader_xyc_te, acc_criterion, device='cuda') * 100))
+                 loader_xyc_te, acc_criterion, device='cuda',
+                 # shortcut specific
+                 shortcut_mode = flags.shortcut,
+                 shortcut_threshold = flags.threshold,
+                 n_shortcuts = flags.n_shortcuts,
+                 net_shortcut = net_s,
+                 # shortcut specific done
+            ) * 100))
     elif flags.retrain:
         cub_train = CUB_train_transform(Subset(cub, train_val_indices),
                                         mode=flags.transform)
@@ -207,18 +225,6 @@ if __name__ == '__main__':
         loader_xyc = load(cub_train, True)
         loader_xyc_eval = load(cub_train_eval, False)
 
-        net = cbm(attr_names, flags.c_model_path,
-                  loader_xyc, loader_xyc_eval,
-                  loader_xyc_te,
-                  n_epochs=flags.n_epochs, report_every=1,
-                  lr_step=flags.lr_step,
-                  savepath=model_name, use_aux=flags.use_aux,
-                  independent=flags.ind)
+        net = run_train()
     else:
-        net = cbm(attr_names, flags.c_model_path,
-                  loader_xyc, loader_xyc_eval,
-                  loader_xyc_te, loader_xyc_val=loader_xyc_val,
-                  n_epochs=flags.n_epochs, report_every=1,
-                  lr_step=flags.lr_step,
-                  savepath=model_name, use_aux=flags.use_aux,
-                  independent=flags.ind)
+        net = run_train(loader_xyc_val=loader_xyc_val)

@@ -14,6 +14,7 @@ from joblib import Parallel, delayed
 # custom import
 from lib.models import CCM
 from lib.utils import attribute2idx
+from lib.data import CUB_shortcut_transform
 
 @torch.no_grad()
 def get_output(net, loader):
@@ -50,13 +51,14 @@ def bootstrap(metric, y, y_hat, l=2.5, h=97.5, n=100, n_jobs=4):
     return s - dh, s - dl
 
 @torch.no_grad()
-def test(net, loader, criterion, device='cpu'):
+def test(net, loader, criterion, device='cpu', **kwargs):
     net.eval()
     losses = []
     total = 0
     for d in tqdm.tqdm(loader, desc="test eval"):
         x, y = d[0], d[1] # assume the first 2 are x, y to accomendate xyc
         x, y = x.to(device), y.to(device)
+        x = CUB_shortcut_transform(x, y, **kwargs)
         o = net(x)
         l = criterion(o, y).mean()
         bs = o.shape[0]

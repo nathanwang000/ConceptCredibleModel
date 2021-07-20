@@ -1,4 +1,5 @@
 import torch
+from collections.abc import Iterable
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
@@ -8,10 +9,10 @@ import os
 import pathlib
 import tqdm
 from torchvision.transforms import GaussianBlur, CenterCrop, ColorJitter, Grayscale, RandomCrop, RandomHorizontalFlip
+# torch.multiprocessing.set_start_method('spawn') # only useful when cuda need inside transform
 
 # custom
 from lib.utils import birdfile2class, attribute2idx, get_class_attributes, get_image_attributes, get_attribute_name, birdfile2idx
-from lib.eval import get_output
 
 class SubColumn(Dataset):
     '''
@@ -48,39 +49,6 @@ class TransformWrapper(Dataset):
         d = self.transform(d)
         return d
 
-class LearnedAttrWrapper(Dataset):
-    '''
-    Deprecated: used for learn_concepts.py; now use concepts_model.py
-    precompute learned attributes from attribute_model_names
-    '''
-
-    def __init__(self, dataset, attribute_model_names, bs=32, num_workers=8):
-        self.dataset = dataset
-        model_names = list(map(lambda name: ".".join(name.split(".")[:-1]) \
-                               if len(name.split(".")) > 1 else name,
-                               attribute_model_names))
-        # precompute if model output not saved
-        learned_attrs = []
-        for name in tqdm.tqdm(model_names, desc="loading learned attributes"):
-            if not os.path.exists(name + ".out"):
-                net = torch.load(name + ".pt")
-                loader = DataLoader(dataset, batch_size=bs, shuffle=False,
-                                    num_workers=num_workers)
-                o = get_output(net, loader) # np array output (n, c)
-                torch.save(o, name+".out")
-            else:
-                o = torch.load(name+".out")
-
-            learned_attrs.append(o.reshape(len(o), -1))
-        self.learned_attrs = torch.from_numpy(np.hstack(learned_attrs)).float()
-                
-    def __len__(self):
-        return len(self.dataset)
-
-    def __getitem__(self, idx):
-        d = self.dataset[idx]
-        d['attrs_learned'] = self.learned_attrs[idx]
-        return d
         
 ########### CUB specific
 class SubAttr(Dataset):
@@ -182,43 +150,6 @@ def CUB_test_transform(dataset, mode="cbm"):
         
     return TransformWrapper(dataset, x_transform(transform))
 
-def class_dependent_noise_transform(d, n_shortcuts, sigma_max=0.1, threshold=0,
-                                    shortcut_level=None):
-    '''
-    d: single dataset instance e.g. dataset[idx]
-    n_shortcuts: number of shortcut classes
-    sigma_max: max noise scale, threshold: before independent noise
-    shortcut_level: manual shortcut level for debug
-    '''
-    assert 0 <= threshold <= 1, "threshold should be in [0, 1]"
-    assert n_shortcuts <= 200, "shortcut classes <= 200"
-    sigmas = torch.linspace(0, sigma_max, n_shortcuts)
-    z = torch.rand(1)
-    if shortcut_level is None:
-        if z < threshold:
-            shortcut_level = d['y'] % n_shortcuts
-        else:
-            shortcut_level = np.random.choice(n_shortcuts)
-    sigma = sigmas[shortcut_level]
-    d['x'] = d['x'] + sigma * torch.randn(d['x'].shape)
-    d['s'] = shortcut_level
-    return d
-
-def CUB_shortcut_transform(dataset, mode="clean", threshold=0, n_shortcuts=200):
-    '''
-    transform shortcut for CUB
-    '''
-    if mode == 'clean': # without shortcut
-        transform = lambda d: d
-    elif mode == 'noise':
-        def transform(d):
-            return class_dependent_noise_transform(d, n_shortcuts=n_shortcuts,
-                                                   threshold=threshold)
-    else: # todo: shortcut path
-        raise Exception("not recognizable shortcut name")
-        
-    return TransformWrapper(dataset, transform)
-    
 class small_CUB(Dataset):
     '''
     small CUB dataset just for thesis proposal
@@ -313,4 +244,99 @@ class CUB(Dataset):
         return {"x": x, "y": y, "filename": filename,
                 "attr": attr}
 
+###### shortcut transforms
+def shortcut_noise_transform(x, y, n_shortcuts, sigma_max=0.1, threshold=0,
+                                    shortcut_level=None):
+    '''
+    x: input to transform (bs, *) or (*)
+    y: noise depend on this variable (bs,) or int or float
+    n_shortcuts: number of shortcut classes
+    sigma_max: max noise scale, threshold: before independent noise
+    shortcut_level: manual shortcut level for debug
+    return transformed x
+    '''
+    assert 0 <= threshold <= 1, "threshold should be in [0, 1]"
+    assert n_shortcuts <= 200, "shortcut classes <= 200"
+
+    sigmas = torch.linspace(0, sigma_max, n_shortcuts)
+    z = torch.rand(1)
+    if shortcut_level is None:
+        if z < threshold:
+            shortcut_level = y % n_shortcuts
+        else:
+            if isinstance(y, Iterable):
+                # batch version
+                shortcut_level = torch.from_numpy(np.random.choice(n_shortcuts,
+                                                                   len(y))).long()
+            else:
+                shortcut_level = np.random.choice(n_shortcuts)
+            
+    with torch.no_grad():
+        sigma = sigmas[shortcut_level] # (bs,) or 1
+        
+    if isinstance(y, Iterable):
+        # batch version
+        x = x + (sigma.to(y.device) * torch.randn_like(x).transpose(0, -1))\
+            .transpose(0, -1)
+    else:
+        x = x + sigma * torch.randn_like(x)
+    return x
+
+def CUB_shortcut_transform(x, y, **kwargs):
+    if 'shortcut_mode' not in kwargs: return x
+    mode = kwargs['shortcut_mode']
+    if mode == 'clean':
+        return x
+    elif mode == 'noise':
+        x = shortcut_noise_transform(x, y,
+                                     n_shortcuts=kwargs['n_shortcuts'],
+                                     threshold=kwargs['shortcut_threshold'])
+    else:
+        x = shortcut_noise_transform(x, kwargs['net_shortcut'](x).argmax(1),
+                                     n_shortcuts=kwargs['n_shortcuts'],
+                                     threshold=kwargs['shortcut_threshold'])
+    return x
+    
+    
+def old_CUB_shortcut_transform(dataset, mode="clean", threshold=0,
+                               n_shortcuts=200, device='cuda'):
+    '''
+    transform shortcut for CUB
+    DEPRECATED
+    '''
+    if mode == 'clean': # without shortcut
+        transform = lambda d: d
+    elif mode == 'noise':
+        def transform(d):
+            d['x'] = shortcut_noise_transform(d['x'], d['y'],
+                                              n_shortcuts=n_shortcuts,
+                                              threshold=threshold)
+            return d
+    else: # shortcut as yhat
+        net = torch.load(mode)
+        net.eval()
+        net.to(device)
+
+        # # the implementation below ignores data augmentation
+        # with torch.no_grad(): # w/o this 15 min, with this 10 + 0.5 min
+        #     yhat = []
+        #     loader =  DataLoader(dataset, batch_size=64, shuffle=False, num_workers=8)
+        #     for d in tqdm.tqdm(loader, desc="computing shortcuts"):
+        #         yhat.extend(list(net(d['x'].to(device)).argmax(1).cpu()))
+
+        #     # 10 min
+        #     for idx, d in enumerate(tqdm.tqdm(dataset, desc="apply shortcut")):
+        #         d['yhat'] = yhat[idx]
+                
+        def transform(d):
+            # the below implementation is too slow; cannot use cuda inside transform
+            with torch.no_grad():
+                yhat = net(d['x'].unsqueeze(0).to(device))[0].argmax().item()
+            d['x'] = shortcut_noise_transform(d['x'], yhat,
+                                                     n_shortcuts=n_shortcuts,
+                                                     threshold=threshold)
+            return d
+        
+    return TransformWrapper(dataset, transform)
+    
     

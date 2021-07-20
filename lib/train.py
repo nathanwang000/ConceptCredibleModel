@@ -5,11 +5,15 @@ import matplotlib.pyplot as plt
 import torch
 # custom import
 from lib.models import CBM, CCM
+from lib.data import CUB_shortcut_transform
 
 def train_step_standard(net, loader, opt, criterion, device='cpu', **kwargs):
-    losses = []
+    '''train 1 step of standard model'''
+    losses = []    
     for x, y in tqdm.tqdm(loader, desc="train step for 1 epoch"):
         x, y = x.to(device), y.to(device)
+        x = CUB_shortcut_transform(x, y, **kwargs)
+        
         opt.zero_grad()
         o = net(x)
         l = criterion(o, y).mean()
@@ -18,15 +22,18 @@ def train_step_standard(net, loader, opt, criterion, device='cpu', **kwargs):
         losses.append(l.detach().item())
     return losses
     
-def train_step_xyc(net, loader, opt, criterion, independent=False, device='cpu'):
+def train_step_xyc(net, loader, opt, criterion, independent=False, device='cpu',
+                   **kwargs):
     '''
     training step for CBM or CCM model
     independent means whether to train concept and tasks independently
     '''
     assert type(net) in [CBM, CCM], f"must use CBM or CCM model; currently {type(net)}"
     losses = []
+    
     for x, y, c in tqdm.tqdm(loader, desc="train step for 1 epoch xyc"):
         x, y, c = x.to(device), y.to(device), c.to(device).float()
+        x = CUB_shortcut_transform(x, y, **kwargs)
         opt.zero_grad()
 
         if type(net) == CBM:
