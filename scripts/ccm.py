@@ -24,6 +24,7 @@ from sklearn.model_selection import train_test_split
 import argparse
 from torch.optim import lr_scheduler
 import torch.nn.functional as F
+from functools import partial
 
 ###
 FilePath = os.path.dirname(os.path.abspath(__file__))
@@ -128,10 +129,10 @@ def ccm(flags, attr_names, concept_model_path,
     # combined model: todo: should eventually u_no_grad=False 
     net = CCM(x2c, x2u, net_y, c_no_grad=True, u_no_grad=True)
     net.to(device)
+
+    # print('task acc before training: {:.1f}%'.format(
+    #     run_test(net, loader_xyc_te) * 100))
     
-    # print('task acc before training: {:.1f}%'.format(test(net, loader_xyc_te,
-    #                                                       acc_criterion,
-    #                                                       device=device) * 100))
     # add regularization to both u and c
     # lambda o, y, o_c, c, o_u:
     # F.cross_entropy(o, y) + 0.1 * (grad(o[y], o_u, create_graph=True)**2).sum()
@@ -162,25 +163,17 @@ def ccm(flags, attr_names, concept_model_path,
 
     if loader_xyc_val:
         log  = run_train(
-            report_dict={'val acc': (lambda m: test(m, loader_xyc_val,
-                                                    acc_criterion,
-                                                    device=device) * 100, 'max'),
-                         'train acc': (lambda m: test(m, loader_xyc_eval,
-                                                      acc_criterion,
-                                                      device=device) * 100, 'max')},
+            report_dict={'val acc': (lambda m: run_test(m, loader_xyc_val) * 100, 'max'),
+                         'train acc': (lambda m: run_test(m, loader_xyc_eval) * 100,
+                                       'max')},
                     early_stop_metric='val acc')
     else:
         log = run_train(
-            report_dict={'train acc': (lambda m: test(m, loader_xyc_eval,
-                                                      acc_criterion,
-                                                      device=device) * 100, 'max'),
-                         'test acc': (lambda m: test(m, loader_xyc_te,
-                                                     acc_criterion,
-                                                     device=device) * 100, 'max')})
+            report_dict={'test acc': (lambda m: run_test(m, loader_xyc_te) * 100, 'max'),
+                         'train acc': (lambda m: run_test(m, loader_xyc_eval) * 100,
+                                       'max')})
 
-    print('task acc after training: {:.1f}%'.format(test(net, loader_xyc_te,
-                                                         acc_criterion,
-                                                         device=device) * 100))        
+    print('task acc after training: {:.1f}%'.format(run_test(net, loader_xyc_te) * 100))
     return net
 
 if __name__ == '__main__':
@@ -234,18 +227,18 @@ if __name__ == '__main__':
         n_epochs=flags.n_epochs, report_every=1,
         lr_step=flags.lr_step,
         savepath=model_name, use_aux=flags.use_aux, **kwargs)
+    run_test = partial(test, 
+                       criterion=acc_criterion, device='cuda',
+                       # shortcut specific
+                       shortcut_mode = flags.shortcut,
+                       shortcut_threshold = flags.threshold,
+                       n_shortcuts = flags.n_shortcuts,
+                       net_shortcut = net_s)
 
     if flags.eval:
         print('task acc after training: {:.1f}%'.format(
-            test(torch.load(f'{model_name}.pt'),
-                 loader_xyc_te, acc_criterion, device='cuda',
-                 # shortcut specific
-                 shortcut_mode = flags.shortcut,
-                 shortcut_threshold = flags.threshold,
-                 n_shortcuts = flags.n_shortcuts,
-                 net_shortcut = net_s,
-                 # shortcut specific done
-            ) * 100))
+            run_test(torch.load(f'{model_name}.pt'),
+                     loader_xyc_te) * 100))
     elif flags.retrain:
         cub_train = CUB_train_transform(Subset(cub, train_val_indices),
                                         mode=flags.transform)
