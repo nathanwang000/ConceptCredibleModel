@@ -24,6 +24,7 @@ from sklearn.model_selection import train_test_split
 import argparse
 from torch.optim import lr_scheduler
 import torch.nn.functional as F
+from functools import partial
 
 ###
 FilePath = os.path.dirname(os.path.abspath(__file__))
@@ -32,7 +33,7 @@ if RootPath not in sys.path: # parent directory
     sys.path = [RootPath] + sys.path
 from lib.models import MLP
 from lib.data import small_CUB, CUB, SubColumn, CUB_train_transform, CUB_test_transform
-from lib.data import SubAttr, CUB_shortcut_transform
+from lib.data import SubAttr
 from lib.train import train
 from lib.eval import get_output, test, plot_log, shap_net_x, shap_ccm_c, bootstrap
 from lib.utils import birdfile2class, birdfile2idx, is_test_bird_idx, get_bird_name
@@ -82,7 +83,7 @@ def calc_imbalance(train_dataset):
     return (total / n_ones) - 1
     
 def concept_model(n_attrs, loader_xy, loader_xy_eval, loader_xy_te, loader_xy_val=None,
-                  n_epochs=10, report_every=1, lr_step=1000,
+                  n_epochs=10, report_every=1, lr_step=1000, net_s=net_s,
                   device='cuda', savepath=None, use_aux=False,
                   imbalance_ratio=None):
     '''
@@ -112,31 +113,31 @@ def concept_model(n_attrs, loader_xy, loader_xy_eval, loader_xy_te, loader_xy_va
     # train
     opt = optim.SGD(net.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0004)
     scheduler = lr_scheduler.StepLR(opt, step_size=lr_step)
+
+    run_train = lambda **kwargs: train(
+        net, loader_xy, opt, criterion=criterion,
+        n_epochs=n_epochs, report_every=report_every,
+        device=device, savepath=savepath,
+        scheduler=scheduler, **kwargs)
+    
     if loader_xy_val:
-        log = train(net, loader_xy, opt, criterion=criterion,
-                    n_epochs=n_epochs, report_every=report_every,
-                    device=device, savepath=savepath,
-                    report_dict={'val acc': (lambda m: test(m, loader_xy_val,
-                                                            acc_criterion,
-                                                            device=device) * 100, 'max'),
-                                 'train acc': (lambda m: test(m, loader_xy_eval,
-                                                              acc_criterion,
-                                                              device=device) * 100,
-                                               'max')},
-                    early_stop_metric='val acc',
-                    scheduler=scheduler)
+        log = run_train(
+            report_dict={'val acc': (lambda m: test(m, loader_xy_val,
+                                                    acc_criterion,
+                                                    device=device) * 100, 'max'),
+                         'train acc': (lambda m: test(m, loader_xy_eval,
+                                                      acc_criterion,
+                                                      device=device) * 100, 'max')},
+            early_stop_metric='val acc')
+
     else:
-        log = train(net, loader_xy, opt, criterion=criterion,
-                    n_epochs=n_epochs, report_every=report_every,
-                    device=device, savepath=savepath,
-                    report_dict={'train acc': (lambda m: test(m, loader_xy_eval,
-                                                            acc_criterion,
-                                                            device=device) * 100, 'max'),
-                                 'test acc': (lambda m: test(m, loader_xy_te,
-                                                              acc_criterion,
-                                                              device=device) * 100,
-                                               'max')},
-                    scheduler=scheduler)
+        log = run_train(
+            report_dict={'train acc': (lambda m: test(m, loader_xy_eval,
+                                                      acc_criterion,
+                                                      device=device) * 100, 'max'),
+                         'test acc': (lambda m: test(m, loader_xy_te,
+                                                     acc_criterion,
+                                                     device=device) * 100, 'max')})
 
     print('task acc after training: {:.1f}%'.format(test(net, loader_xy_te,
                                                          acc_criterion,
@@ -178,12 +179,8 @@ if __name__ == '__main__':
     print('mean imbalance ratio is', imbalance_ratio.mean().item()) 
 
     # dataset
-    shortcut = lambda d: CUB_shortcut_transform(d,
-                                                mode=flags.shortcut,
-                                                threshold=flags.threshold,
-                                                n_shortcuts=flags.n_shortcuts)
     subcolumn = lambda d: SubColumn(SubAttr(d, ind_maj_attr), ['x', 'attr'])
-    load = lambda d, shuffle: DataLoader(subcolumn(shortcut(d)), batch_size=32,
+    load = lambda d, shuffle: DataLoader(subcolumn(d), batch_size=32,
                                 shuffle=shuffle, num_workers=8)
     loader_xy = load(cub_train, True)
     loader_xy_val = load(cub_val, False)
@@ -192,10 +189,37 @@ if __name__ == '__main__':
 
     print(f"# train: {len(cub_train)}, # val: {len(cub_val)}, # test: {len(cub_test)}")
 
+    if flags.shortcut not in ['clean', 'noise']:
+        net_s = torch.load(flags.shortcut)
+    else:
+        net_s = None
+
+    run_train = lambda **kwargs: concept_model(
+        flags=flags, len(ind_maj_attr), loader_xy, loader_xy_eval,
+        loader_xy_te,
+        # shortcut specific
+        shortcut_mode = flags.shortcut,
+        shortcut_threshold = flags.threshold,
+        n_shortcuts = flags.n_shortcuts,
+        net_shortcut = net_s,
+        # shortcut specific done
+        n_epochs=flags.n_epochs, report_every=1,
+        lr_step=flags.lr_step,
+        savepath=model_name, use_aux=flags.use_aux,
+        imbalance_ratio=imbalance_ratio,
+        **kwargs)
+
     if flags.eval:
         print('task acc after training: {:.1f}%'.format(
             test(torch.load(f'{model_name}.pt'),
-                 loader_xy_te, acc_criterion, device='cuda') * 100))
+                 loader_xy_te, acc_criterion, device='cuda',
+                 # shortcut specific
+                 shortcut_mode = flags.shortcut,
+                 shortcut_threshold = flags.threshold,
+                 n_shortcuts = flags.n_shortcuts,
+                 net_shortcut = net_s,
+                 # shortcut specific done
+            ) * 100))
     elif flags.retrain:
         cub_train = CUB_train_transform(Subset(cub, train_val_indices),
                                         mode=flags.transform)
@@ -204,17 +228,7 @@ if __name__ == '__main__':
         loader_xy = load(cub_train, True)
         loader_xy_eval = load(cub_train_eval, False)
         
-        net = concept_model(len(ind_maj_attr), loader_xy, loader_xy_eval,
-                            loader_xy_te,
-                            n_epochs=flags.n_epochs, report_every=1,
-                            lr_step=flags.lr_step,
-                            savepath=model_name, use_aux=flags.use_aux,
-                            imbalance_ratio=imbalance_ratio)
+        net = run_train()
     else:
-        net = concept_model(len(ind_maj_attr), loader_xy, loader_xy_eval,
-                            loader_xy_te, loader_xy_val=loader_xy_val,
-                            n_epochs=flags.n_epochs, report_every=1,
-                            lr_step=flags.lr_step,
-                            savepath=model_name, use_aux=flags.use_aux,
-                            imbalance_ratio=imbalance_ratio)
+        net = run_train(loader_xy_val=loader_xy_val)
         

@@ -32,7 +32,7 @@ if RootPath not in sys.path: # parent directory
     sys.path = [RootPath] + sys.path
 from lib.models import MLP, CUB_Subset_Concept_Model, CBM, LambdaNet
 from lib.data import small_CUB, CUB, SubColumn, CUB_train_transform, CUB_test_transform
-from lib.data import SubAttr, CUB_shortcut_transform
+from lib.data import SubAtt
 from lib.train import train, train_step_xyc
 from lib.eval import get_output, test, plot_log, shap_net_x, shap_ccm_c, bootstrap
 from lib.utils import birdfile2class, birdfile2idx, is_test_bird_idx, get_bird_bbox, get_bird_class, get_bird_part, get_part_location, get_multi_part_location, get_bird_name
@@ -111,9 +111,9 @@ def cbm(flags, attr_names, concept_model_path,
     net = CBM(x2c, fc, c_no_grad=True) # default to sequential CBM
     net.to(device)
     
-    print('task acc before training: {:.1f}%'.format(test(net, loader_xyc_te,
-                                                          acc_criterion,
-                                                          device=device) * 100))
+    # print('task acc before training: {:.1f}%'.format(test(net, loader_xyc_te,
+    #                                                       acc_criterion,
+    #                                                       device=device) * 100))
     criterion = lambda o_y, y, o_c, c: F.cross_entropy(o_y, y)
     
     # train
@@ -122,10 +122,12 @@ def cbm(flags, attr_names, concept_model_path,
 
     run_train = lambda **kwargs: train(net, loader_xyc, opt, criterion=criterion,
                                        train_step=train_step_xyc,
+                                       # shortcut specific
                                        shortcut_mode = flags.shortcut,
                                        shortcut_threshold = flags.threshold,
                                        n_shortcuts = flags.n_shortcuts,
                                        net_shortcut = net_s,
+                                       # shortcut specific ends
                                        independent=independent,
                                        n_epochs=n_epochs, report_every=report_every,
                                        device=device, savepath=savepath,
@@ -192,19 +194,21 @@ if __name__ == '__main__':
     
     print(f"# train: {len(cub_train)}, # val: {len(cub_val)}, # test: {len(cub_test)}")
 
-    run_train = lambda **kwargs: cbm(
-        flags, attr_names, flags.c_model_path,
-        loader_xyc, loader_xyc_eval,
-        loader_xyc_te,
-        n_epochs=flags.n_epochs, report_every=1,
-        lr_step=flags.lr_step,
-        savepath=model_name, use_aux=flags.use_aux,
-        independent=flags.ind, **kwargs)
-
+    # shortcut
     if flags.shortcut not in ['clean', 'noise']:
         net_s = torch.load(flags.shortcut)
     else:
         net_s = None
+
+    run_train = lambda **kwargs: cbm(
+        flags, attr_names, flags.c_model_path,
+        loader_xyc, loader_xyc_eval,
+        loader_xyc_te, net_s=net_s,
+        n_epochs=flags.n_epochs, report_every=1,
+        lr_step=flags.lr_step,
+        savepath=model_name, use_aux=flags.use_aux,
+        independent=flags.ind, **kwargs)
+        
     
     if flags.eval:
         print('task acc after training: {:.1f}%'.format(

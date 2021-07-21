@@ -32,7 +32,7 @@ if RootPath not in sys.path: # parent directory
     sys.path = [RootPath] + sys.path
 from lib.models import MLP, LambdaNet, CCM, ConcatNet, CUB_Subset_Concept_Model
 from lib.data import small_CUB, CUB, SubColumn, CUB_train_transform, CUB_test_transform
-from lib.data import SubAttr, CUB_shortcut_transform
+from lib.data import SubAttr
 from lib.train import train, train_step_xyc
 from lib.eval import get_output, test, plot_log, shap_net_x, shap_ccm_c, bootstrap
 from lib.utils import birdfile2class, birdfile2idx, is_test_bird_idx, get_bird_bbox, get_bird_class, get_bird_part, get_part_location, get_multi_part_location, get_bird_name
@@ -84,9 +84,9 @@ def get_args():
     print(args)
     return args
 
-def ccm(attr_names, concept_model_path,
+def ccm(flags, attr_names, concept_model_path,
         loader_xyc, loader_xyc_eval, loader_xyc_te, loader_xyc_val=None,
-        independent=False,
+        independent=False, net_s=None,
         n_epochs=10, report_every=1, lr_step=1000,
         u_model_path=None,
         alpha=0, # regularizaiton strength
@@ -129,9 +129,9 @@ def ccm(attr_names, concept_model_path,
     net = CCM(x2c, x2u, net_y, c_no_grad=True, u_no_grad=True)
     net.to(device)
     
-    print('task acc before training: {:.1f}%'.format(test(net, loader_xyc_te,
-                                                          acc_criterion,
-                                                          device=device) * 100))
+    # print('task acc before training: {:.1f}%'.format(test(net, loader_xyc_te,
+    #                                                       acc_criterion,
+    #                                                       device=device) * 100))
     # add regularization to both u and c
     # lambda o, y, o_c, c, o_u:
     # F.cross_entropy(o, y) + 0.1 * (grad(o[y], o_u, create_graph=True)**2).sum()
@@ -145,35 +145,38 @@ def ccm(attr_names, concept_model_path,
     # train
     opt = optim.SGD(net.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0004)
     scheduler = lr_scheduler.StepLR(opt, step_size=lr_step)
+
+    run_train = lambda **kwargs: train(
+        net, loader_xyc, opt, criterion=criterion,
+        # shortcut specific
+        shortcut_mode = flags.shortcut,
+        shortcut_threshold = flags.threshold,
+        n_shortcuts = flags.n_shortcuts,
+        net_shortcut = net_s,
+        # shortcut specific done
+        independent=independent,
+        train_step=train_step_xyc,
+        n_epochs=n_epochs, report_every=report_every,
+        device=device, savepath=savepath,
+        scheduler=scheduler, **kwargs)
+
     if loader_xyc_val:
-        log = train(net, loader_xyc, opt, criterion=criterion,
-                    independent=independent,
-                    train_step=train_step_xyc,
-                    n_epochs=n_epochs, report_every=report_every,
-                    device=device, savepath=savepath,
-                    report_dict={'val acc': (lambda m: test(m, loader_xyc_val,
-                                                            acc_criterion,
-                                                            device=device) * 100, 'max'),
-                                 'train acc': (lambda m: test(m, loader_xyc_eval,
-                                                              acc_criterion,
-                                                              device=device) * 100,
-                                               'max')},
-                    early_stop_metric='val acc',
-                    scheduler=scheduler)
+        log  = run_train(
+            report_dict={'val acc': (lambda m: test(m, loader_xyc_val,
+                                                    acc_criterion,
+                                                    device=device) * 100, 'max'),
+                         'train acc': (lambda m: test(m, loader_xyc_eval,
+                                                      acc_criterion,
+                                                      device=device) * 100, 'max')},
+                    early_stop_metric='val acc')
     else:
-        log = train(net, loader_xyc, opt, criterion=criterion,
-                    independent=independent,                   
-                    train_step=train_step_xyc,                    
-                    n_epochs=n_epochs, report_every=report_every,
-                    device=device, savepath=savepath,
-                    report_dict={'train acc': (lambda m: test(m, loader_xyc_eval,
-                                                            acc_criterion,
-                                                            device=device) * 100, 'max'),
-                                 'test acc': (lambda m: test(m, loader_xyc_te,
-                                                              acc_criterion,
-                                                              device=device) * 100,
-                                               'max')},
-                    scheduler=scheduler)
+        log = run_train(
+            report_dict={'train acc': (lambda m: test(m, loader_xyc_eval,
+                                                      acc_criterion,
+                                                      device=device) * 100, 'max'),
+                         'test acc': (lambda m: test(m, loader_xyc_te,
+                                                     acc_criterion,
+                                                     device=device) * 100, 'max')})
 
     print('task acc after training: {:.1f}%'.format(test(net, loader_xyc_te,
                                                          acc_criterion,
@@ -207,12 +210,8 @@ if __name__ == '__main__':
     acc_criterion = lambda o, y: (o.argmax(1) == y).float()
 
     # dataset
-    shortcut = lambda d: CUB_shortcut_transform(d,
-                                                mode=flags.shortcut,
-                                                threshold=flags.threshold,
-                                                n_shortcuts=flags.n_shortcuts)
     subcolumn = lambda d: SubColumn(SubAttr(d, attr_names), ['x', 'y', 'attr'])
-    load = lambda d, shuffle: DataLoader(subcolumn(shortcut(d)), batch_size=32,
+    load = lambda d, shuffle: DataLoader(subcolumn(d), batch_size=32,
                                 shuffle=shuffle, num_workers=8)
     loader_xyc = load(cub_train, True)
     loader_xyc_val = load(cub_val, False)
@@ -221,10 +220,32 @@ if __name__ == '__main__':
     
     print(f"# train: {len(cub_train)}, # val: {len(cub_val)}, # test: {len(cub_test)}")
 
+    if flags.shortcut not in ['clean', 'noise']:
+        net_s = torch.load(flags.shortcut)
+    else:
+        net_s = None
+    
+    run_train = lambda **kwargs:ccm(
+        flags, attr_names, flags.c_model_path,
+        loader_xyc, loader_xyc_eval,
+        loader_xyc_te, net_s=net_s,
+        independent=flags.ind, alpha=flags.alpha,
+        u_model_path = flags.u_model_path,
+        n_epochs=flags.n_epochs, report_every=1,
+        lr_step=flags.lr_step,
+        savepath=model_name, use_aux=flags.use_aux, **kwargs)
+
     if flags.eval:
         print('task acc after training: {:.1f}%'.format(
             test(torch.load(f'{model_name}.pt'),
-                 loader_xyc_te, acc_criterion, device='cuda') * 100))
+                 loader_xyc_te, acc_criterion, device='cuda',
+                 # shortcut specific
+                 shortcut_mode = flags.shortcut,
+                 shortcut_threshold = flags.threshold,
+                 n_shortcuts = flags.n_shortcuts,
+                 net_shortcut = net_s,
+                 # shortcut specific done
+            ) * 100))
     elif flags.retrain:
         cub_train = CUB_train_transform(Subset(cub, train_val_indices),
                                         mode=flags.transform)
@@ -232,22 +253,8 @@ if __name__ == '__main__':
                                              mode=flags.transform)
         loader_xyc = load(cub_train, True)
         loader_xyc_eval = load(cub_train_eval, False)
-        
-        net = ccm(attr_names, flags.c_model_path,
-                  loader_xyc, loader_xyc_eval,
-                  loader_xyc_te,
-                  independent=flags.ind, alpha=flags.alpha,
-                  u_model_path = flags.u_model_path,
-                  n_epochs=flags.n_epochs, report_every=1,
-                  lr_step=flags.lr_step,
-                  savepath=model_name, use_aux=flags.use_aux)
+
+        net = run_train()
     else:
-        net = ccm(attr_names, flags.c_model_path,
-                  loader_xyc, loader_xyc_eval,
-                  loader_xyc_te, loader_xyc_val=loader_xyc_val,
-                  independent=flags.ind, alpha=flags.alpha,
-                  u_model_path = flags.u_model_path,                  
-                  n_epochs=flags.n_epochs, report_every=1,
-                  lr_step=flags.lr_step,
-                  savepath=model_name, use_aux=flags.use_aux)
+        net = run_train(loader_xyc_val=loader_xyc_val)
         

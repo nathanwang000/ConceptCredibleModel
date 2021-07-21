@@ -32,7 +32,6 @@ if RootPath not in sys.path: # parent directory
     sys.path = [RootPath] + sys.path
 from lib.models import MLP
 from lib.data import small_CUB, CUB, SubColumn, CUB_train_transform, CUB_test_transform
-from lib.data import CUB_shortcut_transform
 from lib.train import train
 from lib.eval import get_output, test, plot_log, shap_net_x, shap_ccm_c, bootstrap
 from lib.utils import birdfile2class, birdfile2idx, is_test_bird_idx, describe_bird
@@ -85,7 +84,7 @@ def standard_model(flags, loader_xy, loader_xy_eval, loader_xy_te, loader_xy_val
     net.fc = nn.Linear(2048, 200) # 200 bird classes
     net.AuxLogits.fc = nn.Linear(768, 200)
     net.to(device)
-    # todo: uncomment
+
     # print('task acc before training: {:.1f}%'.format(test(net, loader_xy_te,
     #                                                       acc_criterion,
     #                                                       device=device) * 100))
@@ -186,10 +185,17 @@ if __name__ == '__main__':
         n_epochs=flags.n_epochs, report_every=1,
         lr_step=flags.lr_step,
         savepath=model_name, use_aux=flags.use_aux, **kwargs)
-
-    
+    run_test = partial(test, device='cuda',
+                       criterion=acc_criterion,
+                       # shortcut specific
+                       shortcut_mode = flags.shortcut,
+                       shortcut_threshold = flags.threshold,
+                       n_shortcuts = flags.n_shortcuts,
+                       net_shortcut = net_s)
     if flags.eval:
         print('task acc after training: {:.1f}%'.format(
+            # run_test(torch.load(f'{model_name}.pt'),
+            #          loader_xy_te)
             test(torch.load(f'{model_name}.pt'),
                  loader_xy_te, acc_criterion, device='cuda',
                  # shortcut specific
