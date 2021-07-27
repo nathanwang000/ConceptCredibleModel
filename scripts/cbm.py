@@ -24,6 +24,7 @@ from sklearn.model_selection import train_test_split
 import argparse
 from torch.optim import lr_scheduler
 import torch.nn.functional as F
+from functools import partial
 
 ###
 FilePath = os.path.dirname(os.path.abspath(__file__))
@@ -32,7 +33,7 @@ if RootPath not in sys.path: # parent directory
     sys.path = [RootPath] + sys.path
 from lib.models import MLP, CUB_Subset_Concept_Model, CBM, LambdaNet
 from lib.data import small_CUB, CUB, SubColumn, CUB_train_transform, CUB_test_transform
-from lib.data import SubAtt
+from lib.data import SubAttr
 from lib.train import train, train_step_xyc
 from lib.eval import get_output, test, plot_log, shap_net_x, shap_ccm_c, bootstrap
 from lib.utils import birdfile2class, birdfile2idx, is_test_bird_idx, get_bird_bbox, get_bird_class, get_bird_part, get_part_location, get_multi_part_location, get_bird_name
@@ -110,10 +111,9 @@ def cbm(flags, attr_names, concept_model_path,
         
     net = CBM(x2c, fc, c_no_grad=True) # default to sequential CBM
     net.to(device)
-    
-    # print('task acc before training: {:.1f}%'.format(test(net, loader_xyc_te,
-    #                                                       acc_criterion,
-    #                                                       device=device) * 100))
+
+    # print('task acc before training: {:.1f}%'.format(
+    #     run_test(net, loader_xyc_te) * 100))
     criterion = lambda o_y, y, o_c, c: F.cross_entropy(o_y, y)
     
     # train
@@ -132,29 +132,21 @@ def cbm(flags, attr_names, concept_model_path,
                                        n_epochs=n_epochs, report_every=report_every,
                                        device=device, savepath=savepath,
                                        scheduler=scheduler, **kwargs)
+
     if loader_xyc_val:
-        log = run_train(
-            report_dict={'val acc': (lambda m: test(m, loader_xyc_val,
-                                                    acc_criterion,
-                                                    device=device) * 100, 'max'),
-                         'train acc': (lambda m: test(m, loader_xyc_eval,
-                                                      acc_criterion,
-                                                      device=device) * 100, 'max')},
-            early_stop_metric='val acc')
-
+        log  = run_train(
+            report_dict={'val acc': (lambda m: run_test(m, loader_xyc_val) * 100, 'max'),
+                         'train acc': (lambda m: run_test(m, loader_xyc_eval) * 100,
+                                       'max')},
+                    early_stop_metric='val acc')
     else:
-         log = run_train(
-             report_dict={'train acc': (lambda m: test(m, loader_xyc_eval,
-                                                       acc_criterion,
-                                                       device=device) * 100, 'max'),
-                          'test acc': (lambda m: test(m, loader_xyc_te,
-                                                      acc_criterion,
-                                                      device=device) * 100, 'max')})
+        log = run_train(
+            report_dict={'test acc': (lambda m: run_test(m, loader_xyc_te) * 100, 'max'),
+                         'train acc': (lambda m: run_test(m, loader_xyc_eval) * 100,
+                                       'max')})
 
 
-    print('task acc after training: {:.1f}%'.format(test(net, loader_xyc_te,
-                                                         acc_criterion,
-                                                         device=device) * 100))        
+    print('task acc after training: {:.1f}%'.format(run_test(net, loader_xyc_te) * 100))
     return net
 
 if __name__ == '__main__':
@@ -208,19 +200,18 @@ if __name__ == '__main__':
         lr_step=flags.lr_step,
         savepath=model_name, use_aux=flags.use_aux,
         independent=flags.ind, **kwargs)
-        
+    run_test = partial(test, 
+                       criterion=acc_criterion, device='cuda',
+                       # shortcut specific
+                       shortcut_mode = flags.shortcut,
+                       shortcut_threshold = flags.threshold,
+                       n_shortcuts = flags.n_shortcuts,
+                       net_shortcut = net_s)
     
     if flags.eval:
         print('task acc after training: {:.1f}%'.format(
-            test(torch.load(f'{model_name}.pt'),
-                 loader_xyc_te, acc_criterion, device='cuda',
-                 # shortcut specific
-                 shortcut_mode = flags.shortcut,
-                 shortcut_threshold = flags.threshold,
-                 n_shortcuts = flags.n_shortcuts,
-                 net_shortcut = net_s,
-                 # shortcut specific done
-            ) * 100))
+            run_test(torch.load(f'{model_name}.pt'),
+                     loader_xyc_te) * 100))
     elif flags.retrain:
         cub_train = CUB_train_transform(Subset(cub, train_val_indices),
                                         mode=flags.transform)
