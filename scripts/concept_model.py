@@ -83,7 +83,7 @@ def calc_imbalance(train_dataset):
     return (total / n_ones) - 1
     
 def concept_model(n_attrs, loader_xy, loader_xy_eval, loader_xy_te, loader_xy_val=None,
-                  n_epochs=10, report_every=1, lr_step=1000, net_s=net_s,
+                  n_epochs=10, report_every=1, lr_step=1000, net_s=None,
                   device='cuda', savepath=None, use_aux=False,
                   imbalance_ratio=None):
     '''
@@ -97,9 +97,8 @@ def concept_model(n_attrs, loader_xy, loader_xy_eval, loader_xy_te, loader_xy_va
     net.AuxLogits.fc = nn.Linear(768, n_attrs)
     net.to(device)
     imbalance_ratio = imbalance_ratio.to(device)
-    print('task acc before training: {:.1f}%'.format(test(net, loader_xy_te,
-                                                          acc_criterion,
-                                                          device=device) * 100))
+    # print('task acc before training: {:.1f}%'.format(
+    #     run_test(net, loader_xy_te) * 100))
 
     if use_aux:
         # for inception module where o[1] is auxilliary input to avoid vanishing
@@ -119,29 +118,21 @@ def concept_model(n_attrs, loader_xy, loader_xy_eval, loader_xy_te, loader_xy_va
         n_epochs=n_epochs, report_every=report_every,
         device=device, savepath=savepath,
         scheduler=scheduler, **kwargs)
-    
-    if loader_xy_val:
-        log = run_train(
-            report_dict={'val acc': (lambda m: test(m, loader_xy_val,
-                                                    acc_criterion,
-                                                    device=device) * 100, 'max'),
-                         'train acc': (lambda m: test(m, loader_xy_eval,
-                                                      acc_criterion,
-                                                      device=device) * 100, 'max')},
-            early_stop_metric='val acc')
 
+    if loader_xy_val:
+        log  = run_train(
+            report_dict={'val acc': (lambda m: run_test(m, loader_xy_val) * 100, 'max'),
+                         'train acc': (lambda m: run_test(m, loader_xy_eval) * 100,
+                                       'max')},
+                    early_stop_metric='val acc')
     else:
         log = run_train(
-            report_dict={'train acc': (lambda m: test(m, loader_xy_eval,
-                                                      acc_criterion,
-                                                      device=device) * 100, 'max'),
-                         'test acc': (lambda m: test(m, loader_xy_te,
-                                                     acc_criterion,
-                                                     device=device) * 100, 'max')})
+            report_dict={'test acc': (lambda m: run_test(m, loader_xy_te) * 100, 'max'),
+                         'train acc': (lambda m: run_test(m, loader_xy_eval) * 100,
+                                       'max')})
+    
 
-    print('task acc after training: {:.1f}%'.format(test(net, loader_xy_te,
-                                                         acc_criterion,
-                                                         device=device) * 100))        
+    print('task acc after training: {:.1f}%'.format(run_test(net, loader_xy_te) * 100))
     return net
 
 if __name__ == '__main__':
@@ -195,31 +186,25 @@ if __name__ == '__main__':
         net_s = None
 
     run_train = lambda **kwargs: concept_model(
-        flags=flags, len(ind_maj_attr), loader_xy, loader_xy_eval,
-        loader_xy_te,
-        # shortcut specific
-        shortcut_mode = flags.shortcut,
-        shortcut_threshold = flags.threshold,
-        n_shortcuts = flags.n_shortcuts,
-        net_shortcut = net_s,
-        # shortcut specific done
+        len(ind_maj_attr), loader_xy, loader_xy_eval,
+        loader_xy_te, net_s=net_s,
         n_epochs=flags.n_epochs, report_every=1,
         lr_step=flags.lr_step,
         savepath=model_name, use_aux=flags.use_aux,
         imbalance_ratio=imbalance_ratio,
         **kwargs)
+    run_test = partial(test, 
+                       criterion=acc_criterion, device='cuda',
+                       # shortcut specific
+                       shortcut_mode = flags.shortcut,
+                       shortcut_threshold = flags.threshold,
+                       n_shortcuts = flags.n_shortcuts,
+                       net_shortcut = net_s)
 
     if flags.eval:
         print('task acc after training: {:.1f}%'.format(
-            test(torch.load(f'{model_name}.pt'),
-                 loader_xy_te, acc_criterion, device='cuda',
-                 # shortcut specific
-                 shortcut_mode = flags.shortcut,
-                 shortcut_threshold = flags.threshold,
-                 n_shortcuts = flags.n_shortcuts,
-                 net_shortcut = net_s,
-                 # shortcut specific done
-            ) * 100))
+            run_test(torch.load(f'{model_name}.pt'),
+                     loader_xy_te) * 100))
     elif flags.retrain:
         cub_train = CUB_train_transform(Subset(cub, train_val_indices),
                                         mode=flags.transform)
