@@ -116,9 +116,9 @@ def ccm(flags, attr_names, concept_model_path,
     x2c.aux_logits = False
 
     if independent:    
-        x2c = nn.Sequential(x2c, noise_transition, transition, nn.Sigmoid())
+        x2c = nn.Sequential(x2c, transition, noise_transition, nn.Sigmoid())
     else:
-        x2c = nn.Sequential(x2c, noise_transition, transition)
+        x2c = nn.Sequential(x2c, transition, noise_transition)
     
     # unknown concept model
     if u_model_path:

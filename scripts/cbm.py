@@ -110,11 +110,11 @@ def cbm(flags, attr_names, concept_model_path,
     fc = nn.Linear(len(attr_names), 200) # 200 bird classes    
 
     if independent:
-        x2c = nn.Sequential(x2c, noise_transition, transition, nn.Sigmoid())
-        # x2c = nn.Sequential(x2c, transition,
+        x2c = nn.Sequential(x2c, transition, noise_transition, nn.Sigmoid())
+        # x2c = nn.Sequential(x2c, transition, noise_transition,
         #                     LambdaNet(binary_sigmoid))
     else:
-        x2c = nn.Sequential(x2c, noise_transition, transition)
+        x2c = nn.Sequential(x2c, transition, noise_transition)
         
     net = CBM(x2c, fc, c_no_grad=True) # default to sequential CBM
     net.to(device)
