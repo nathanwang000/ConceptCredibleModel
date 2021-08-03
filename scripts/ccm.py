@@ -106,6 +106,7 @@ def ccm(flags, attr_names, concept_model_path,
     d_x2c = len(attr_names) # 108 concepts
     
     # known concept model
+    # todo: add irrelevant concept to simulate wrong expert
     x2c = torch.load(f'{RootPath}/{concept_model_path}.pt')
     x2c.aux_logits = False
     if independent:    

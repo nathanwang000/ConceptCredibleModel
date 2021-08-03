@@ -115,6 +115,12 @@ def concept_model(n_attrs, loader_xy, loader_xy_eval, loader_xy_te, loader_xy_va
 
     run_train = lambda **kwargs: train(
         net, loader_xy, opt, criterion=criterion,
+        # shortcut specific
+        shortcut_mode = flags.shortcut,
+        shortcut_threshold = flags.threshold,
+        n_shortcuts = flags.n_shortcuts,
+        net_shortcut = net_s,
+        # shortcut specific done
         n_epochs=n_epochs, report_every=report_every,
         device=device, savepath=savepath,
         scheduler=scheduler, **kwargs)
