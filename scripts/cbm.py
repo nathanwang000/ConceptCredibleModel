@@ -102,19 +102,23 @@ def cbm(flags, attr_names, concept_model_path,
 
     attr_full_names = get_attr_names(f"{RootPath}/outputs/concepts/concepts_108.txt")
     assert len(attr_full_names) == 108, "108 features required"
-    # use subset of attributes
+    # use subset of attributes: don't need transition b/c it was jointly trained
     transition = CUB_Subset_Concept_Model(attr_names, attr_full_names)
     # add irrelevant concept to simulate wrong expert    
     noise_transition = CUB_Noise_Concept_Model(flags.d_noise)
     
-    fc = nn.Linear(len(attr_names), 200) # 200 bird classes    
+    fc = nn.Linear(len(attr_names), 200) # 200 bird classes
+    # todo: fix below
+    # fc = nn.Linear(len(attr_full_names) - flags.d_noise, 200) # 200 bird classes
 
     if independent:
-        x2c = nn.Sequential(x2c, transition, noise_transition, nn.Sigmoid())
-        # x2c = nn.Sequential(x2c, transition, noise_transition,
-        #                     LambdaNet(binary_sigmoid))
+        x2c = nn.Sequential(x2c, # transition,
+                            noise_transition, nn.Sigmoid())
+        # x2c = nn.Sequential(x2c, # transition, 
+        #                     noise_transition, LambdaNet(binary_sigmoid))
     else:
-        x2c = nn.Sequential(x2c, transition, noise_transition)
+        x2c = nn.Sequential(x2c, # transition,
+                            noise_transition)
         
     net = CBM(x2c, fc, c_no_grad=True) # default to sequential CBM
     net.to(device)

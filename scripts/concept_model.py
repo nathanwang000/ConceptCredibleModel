@@ -53,6 +53,8 @@ def get_args():
                         help="seed for reproducibility")
     parser.add_argument("--transform", default="cbm",
                         help="transform mode to use")
+    parser.add_argument("--d_concepts", default=0, type=int,
+                        help="number of concepts to learn")
     parser.add_argument("--lr_step", type=int, default=1000,
                         help="learning rate decay steps")
     parser.add_argument("--n_epochs", type=int, default=100,
@@ -158,7 +160,9 @@ if __name__ == '__main__':
     # define concepts to learn
     class_attributes = get_class_attributes()
     maj_concepts = class_attributes.loc[:, ((class_attributes >= 50).sum(0) >= 10)] >= 50 # CBM paper report 112 concepts; here is 108
-    ind_maj_attr = list(maj_concepts.columns) 
+    ind_maj_attr = list(maj_concepts.columns)
+    # only use first d_concepts number of concepts
+    ind_maj_attr = ind_maj_attr[:min(flags.d_concepts, len(ind_maj_attr))]
     print(f'we have {len(ind_maj_attr)} concepts to learn')
     
     # define dataset: cub_train_eval is used to evaluate training data
