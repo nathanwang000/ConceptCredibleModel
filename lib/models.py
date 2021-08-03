@@ -52,6 +52,20 @@ class CUB_Subset_Concept_Model(nn.Module):
 
     def forward(self, x):
         return x[:, self.attr_idx]
+
+class CUB_Noise_Concept_Model(nn.Module):
+    '''
+    replaces first d concepts with noise N(0, 1)
+    '''
+    def __init__(self, d):
+        super().__init__()
+        self.d = d
+
+    def forward(self, x):
+        bs, d = x.shape
+        d = min(d, self.d)
+        noise = torch.randn(bs, d).to(x.device)
+        return torch.cat((noise, x[:, d:]), 1)
         
 class GT_CUB_Subset_Concept_Model(nn.Module):
     '''

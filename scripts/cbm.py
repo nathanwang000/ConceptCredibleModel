@@ -32,6 +32,7 @@ RootPath = os.path.dirname(FilePath)
 if RootPath not in sys.path: # parent directory
     sys.path = [RootPath] + sys.path
 from lib.models import MLP, CUB_Subset_Concept_Model, CBM, LambdaNet
+from lib.models import CUB_Noise_Concept_Model
 from lib.data import small_CUB, CUB, SubColumn, CUB_train_transform, CUB_test_transform
 from lib.data import SubAttr
 from lib.train import train, train_step_xyc
@@ -54,6 +55,8 @@ def get_args():
                         help="seed for reproducibility")
     parser.add_argument("--transform", default="cbm",
                         help="transform mode to use")
+    parser.add_argument("--d_noise", default=0, type=int,
+                        help="wrong expert dimensions (noise dimensions in c)")
     parser.add_argument("--lr_step", type=int, default=1000,
                         help="learning rate decay steps")
     parser.add_argument("--n_epochs", type=int, default=100,
@@ -99,15 +102,19 @@ def cbm(flags, attr_names, concept_model_path,
 
     attr_full_names = get_attr_names(f"{RootPath}/outputs/concepts/concepts_108.txt")
     assert len(attr_full_names) == 108, "108 features required"
+    # use subset of attributes
     transition = CUB_Subset_Concept_Model(attr_names, attr_full_names)
+    # add irrelevant concept to simulate wrong expert    
+    noise_transition = CUB_Noise_Concept_Model(flags.d_noise)
+    
     fc = nn.Linear(len(attr_names), 200) # 200 bird classes    
 
     if independent:
-        x2c = nn.Sequential(x2c, transition, nn.Sigmoid())
+        x2c = nn.Sequential(x2c, noise_transition, transition, nn.Sigmoid())
         # x2c = nn.Sequential(x2c, transition,
         #                     LambdaNet(binary_sigmoid))
     else:
-        x2c = nn.Sequential(x2c, transition)
+        x2c = nn.Sequential(x2c, noise_transition, transition)
         
     net = CBM(x2c, fc, c_no_grad=True) # default to sequential CBM
     net.to(device)
