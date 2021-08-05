@@ -127,6 +127,19 @@ class CCM(nn.Module):
         o_u = self.get_ou(x)
         o_y = self.net_y([o_c, o_u])
         return o_y
+
+class CCM_res(nn.Module):
+    '''
+    residual CCM
+    '''
+    def __init__(self, net1, net2): 
+        super().__init__()
+        self.net1 = net1
+        self.net2 = net2
+        # todo: maybe net1 should freeze here
+
+    def forward(self, x):
+        return self.net1(x) + self.net2(x)
     
 class CBM(nn.Module):
     '''

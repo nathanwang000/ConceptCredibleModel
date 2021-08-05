@@ -1,5 +1,5 @@
 '''
-this files trains a sequential or independent CBM MLP version
+this files trains an sequential or independent CCM with residual
 '''
 import sys, os
 import tqdm
@@ -31,7 +31,7 @@ FilePath = os.path.dirname(os.path.abspath(__file__))
 RootPath = os.path.dirname(FilePath)
 if RootPath not in sys.path: # parent directory
     sys.path = [RootPath] + sys.path
-from lib.models import MLP, CUB_Subset_Concept_Model, CBM, LambdaNet
+from lib.models import MLP, LambdaNet, CCM, ConcatNet, CUB_Subset_Concept_Model, CCM_res
 from lib.models import CUB_Noise_Concept_Model
 from lib.data import small_CUB, CUB, SubColumn, CUB_train_transform, CUB_test_transform
 from lib.data import SubAttr
@@ -39,7 +39,8 @@ from lib.train import train, train_step_xyc
 from lib.eval import get_output, test, plot_log, shap_net_x, shap_ccm_c, bootstrap
 from lib.utils import birdfile2class, birdfile2idx, is_test_bird_idx, get_bird_bbox, get_bird_class, get_bird_part, get_part_location, get_multi_part_location, get_bird_name
 from lib.utils import get_attribute_name, code2certainty, get_class_attributes, get_image_attributes, describe_bird
-from lib.utils import get_attr_names
+from lib.utils import get_attr_names, dfs_freeze
+from lib.regularization import EYE
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -48,7 +49,9 @@ def get_args():
     parser.add_argument("--eval", action="store_true",
                         help="whether or not to eval the learned model")
     parser.add_argument("--ind", action="store_true",
-                        help="whether or not to train independent CBM")
+                        help="whether or not to train independent CCM")
+    parser.add_argument("--alpha", default=0, type=float,
+                        help="regularization strength for EYE")
     parser.add_argument("--retrain", action="store_true",
                         help="retrain using all train val data")
     parser.add_argument("--seed", type=int, default=42,
@@ -66,6 +69,9 @@ def get_args():
     parser.add_argument("--c_model_path", type=str,
                         default="gold_models/flip/concepts",
                         help="concept model path starting from root (ignore .pt)")
+    parser.add_argument("--u_model_path", type=str,
+                        default="gold_models/crop/standard",
+                        help="unknown concept model path starting from root (ignore .pt), if None then train from scratch")
     parser.add_argument("--concept_path", type=str,
                         default="outputs/concepts/concepts_108.txt",
                         help="path to file containing concept names")
@@ -77,73 +83,92 @@ def get_args():
     parser.add_argument("--n_shortcuts", default=10, type=int,
                         help="number of shortcuts")
     
+        
     args = parser.parse_args()
     print(args)
     return args
 
-def binary_sigmoid(x):
-    '''
-    discretize sigmoid on top
-    '''
-    return (torch.sigmoid(x) > 0.5).float()
-
-def cbm(flags, attr_names, concept_model_path,
+def ccm(flags, attr_names, concept_model_path,
         loader_xyc, loader_xyc_eval, loader_xyc_te, loader_xyc_val=None,
-        n_epochs=10, report_every=1, lr_step=1000, net_s=None,
-        independent=False,
+        independent=False, net_s=None,
+        n_epochs=10, report_every=1, lr_step=1000,
+        u_model_path=None,
+        alpha=0, # regularizaiton strength
         device='cuda', savepath=None, use_aux=False):
     '''
     loader_xyc_eval is the evaluation of loader_xyc
     if loader_xyc_val: use early stopping, otherwise train for the number of epochs
+    
+    independent: whether or not to train ccm independently
     '''
-    # regular model
-    x2c = torch.load(f'{RootPath}/{concept_model_path}.pt')
-    x2c.aux_logits = False
-
     attr_full_names = get_attr_names(f"{RootPath}/outputs/concepts/concepts_108.txt")
     assert len(attr_full_names) == 108, "108 features required"
-    # use subset of attributes: don't need transition b/c it was jointly trained
+    # use subset of attributes: don't need transition b/c it was jointly trained    
     transition = CUB_Subset_Concept_Model(attr_names, attr_full_names)
     # add irrelevant concept to simulate wrong expert    
     noise_transition = CUB_Noise_Concept_Model(flags.d_noise)
+    
+    d_x2u = 200 # give it a chance to learn standard model
+    d_x2c = len(attr_names) # 108 concepts
+    
+    # known concept model: note here is a cbm model
+    cbm = torch.load(f'{RootPath}/{concept_model_path}.pt')
+    cbm.eval()
+    dfs_freeze(cbm)
+    
+    # x2c.aux_logits = False
 
-    # fc = nn.Linear(len(attr_names), 200) # 200 bird classes    
-    fc = MLP([len(attr_names), 30, 30, 200])
-    # todo: fix below
-    # fc = nn.Linear(len(attr_full_names) - flags.d_noise, 200) # 200 bird classes
-
-    if independent:
-        x2c = nn.Sequential(x2c, # transition,
-                            noise_transition, nn.Sigmoid())
-        # x2c = nn.Sequential(x2c, # transition, 
-        #                     noise_transition, LambdaNet(binary_sigmoid))
+    # if independent:    
+    #     x2c = nn.Sequential(x2c, # transition,
+    #                         noise_transition, nn.Sigmoid())
+    # else:
+    #     x2c = nn.Sequential(x2c, # transition,
+    #                         noise_transition)
+    
+    # unknown concept model
+    if u_model_path:
+        x2u = torch.load(f'{RootPath}/{u_model_path}.pt')
+        x2u.aux_logits = False
     else:
-        x2c = nn.Sequential(x2c, # transition,
-                            noise_transition)
-        
-    net = CBM(x2c, fc, c_no_grad=True) # default to sequential CBM
+        x2u = torch.hub.load('pytorch/vision:v0.9.0', 'inception_v3', pretrained=True)
+        x2u.fc = nn.Linear(2048, d_x2u)
+        x2u.aux_logits = False
+        # x2u.AuxLogits.fc = nn.Linear(768, d_x2u)
+
+    # combined model: todo: should eventually u_no_grad=False
+    net = CCM_res(cbm, x2u)
     net.to(device)
 
     # print('task acc before training: {:.1f}%'.format(
     #     run_test(net, loader_xyc_te) * 100))
-    criterion = lambda o_y, y, o_c, c: F.cross_entropy(o_y, y)
+    
+    # add regularization to both u and c
+    # lambda o, y, o_c, c, o_u:
+    # F.cross_entropy(o, y) + 0.1 * (grad(o[y], o_u, create_graph=True)**2).sum()
+    # + 0.1 * R_sq(c, o_u) # use c b/c o_c may not properly learned
+    # make sure the 3 losses are at the same scale (is there a research question?)
+    # and let dataset give x, y, c
+    r = torch.cat([torch.ones(d_x2c), torch.zeros(d_x2u)]).to(device)
+    criterion = lambda o_y, y: F.cross_entropy(o_y, y) # + \
+    # * EYE(r, net_y[1].weight.abs().sum(0))
     
     # train
     opt = optim.SGD(net.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0004)
     scheduler = lr_scheduler.StepLR(opt, step_size=lr_step)
 
-    run_train = lambda **kwargs: train(net, loader_xyc, opt, criterion=criterion,
-                                       train_step=train_step_xyc,
-                                       # shortcut specific
-                                       shortcut_mode = flags.shortcut,
-                                       shortcut_threshold = flags.threshold,
-                                       n_shortcuts = flags.n_shortcuts,
-                                       net_shortcut = net_s,
-                                       # shortcut specific ends
-                                       independent=independent,
-                                       n_epochs=n_epochs, report_every=report_every,
-                                       device=device, savepath=savepath,
-                                       scheduler=scheduler, **kwargs)
+    run_train = lambda **kwargs: train(
+        net, loader_xyc, opt, criterion=criterion,
+        # shortcut specific
+        shortcut_mode = flags.shortcut,
+        shortcut_threshold = flags.threshold,
+        n_shortcuts = flags.n_shortcuts,
+        net_shortcut = net_s,
+        # shortcut specific done
+        independent=independent,
+        # train_step=train_step_xyc, # b/c not xyc
+        n_epochs=n_epochs, report_every=report_every,
+        device=device, savepath=savepath,
+        scheduler=scheduler, **kwargs)
 
     if loader_xyc_val:
         log  = run_train(
@@ -157,13 +182,12 @@ def cbm(flags, attr_names, concept_model_path,
                          'train acc': (lambda m: run_test(m, loader_xyc_eval) * 100,
                                        'max')})
 
-
     print('task acc after training: {:.1f}%'.format(run_test(net, loader_xyc_te) * 100))
     return net
 
 if __name__ == '__main__':
     flags = get_args()
-    model_name = f"{RootPath}/{flags.outputs_dir}/cbm"
+    model_name = f"{RootPath}/{flags.outputs_dir}/ccm"
     print(model_name)
 
     # attributes to use
@@ -187,8 +211,8 @@ if __name__ == '__main__':
     # accuracy
     acc_criterion = lambda o, y: (o.argmax(1) == y).float()
 
-    # dataset
-    subcolumn = lambda d: SubColumn(SubAttr(d, attr_names), ['x', 'y', 'attr'])
+    # dataset, note only x, y not xyc; todo: change the naming
+    subcolumn = lambda d: SubColumn(SubAttr(d, attr_names), ['x', 'y']) #, 'attr'])
     load = lambda d, shuffle: DataLoader(subcolumn(d), batch_size=32,
                                 shuffle=shuffle, num_workers=8)
     loader_xyc = load(cub_train, True)
@@ -198,20 +222,20 @@ if __name__ == '__main__':
     
     print(f"# train: {len(cub_train)}, # val: {len(cub_val)}, # test: {len(cub_test)}")
 
-    # shortcut
     if flags.shortcut not in ['clean', 'noise']:
         net_s = torch.load(flags.shortcut)
     else:
         net_s = None
-
-    run_train = lambda **kwargs: cbm(
+    
+    run_train = lambda **kwargs:ccm(
         flags, attr_names, flags.c_model_path,
         loader_xyc, loader_xyc_eval,
         loader_xyc_te, net_s=net_s,
+        independent=flags.ind, alpha=flags.alpha,
+        u_model_path = flags.u_model_path,
         n_epochs=flags.n_epochs, report_every=1,
         lr_step=flags.lr_step,
-        savepath=model_name, use_aux=flags.use_aux,
-        independent=flags.ind, **kwargs)
+        savepath=model_name, use_aux=flags.use_aux, **kwargs)
     run_test = partial(test, 
                        criterion=acc_criterion, device='cuda',
                        # shortcut specific
@@ -219,7 +243,7 @@ if __name__ == '__main__':
                        shortcut_threshold = flags.threshold,
                        n_shortcuts = flags.n_shortcuts,
                        net_shortcut = net_s)
-    
+
     if flags.eval:
         print('task acc after training: {:.1f}%'.format(
             run_test(torch.load(f'{model_name}.pt'),
@@ -235,3 +259,4 @@ if __name__ == '__main__':
         net = run_train()
     else:
         net = run_train(loader_xyc_val=loader_xyc_val)
+        
