@@ -8,7 +8,7 @@ All the tracking information are recorded in args.outputs_dir/tid
 examples:
   # run command with some message
   track [command] -m "some message"
-  # log o_dir (use | less to mimic git log)
+  # log o_dir
   track log 
   # log only the tid entry of the log
   track log [o_dir/tid] # will ignore "-o"
@@ -150,25 +150,29 @@ if __name__ == "__main__":
         if flags.txt:
             print(message)
         else:
-            message = message.replace("%", "%%")
-            os.system(f"printf '{message}' | less")            
+            message = message.replace("%", "%%") # -R shows color
+            os.system(f"printf '{message}' | less -R")            
 
     else: # run the command        
         
         if flags.command[0] == 'mkdir':
             o_dir = flags.command[1]
-            tid = o_dir
-            track_log = f"{tid}/track.log"
-            os.system(f"mkdir -p {tid}")
+            if o_dir[-1] == '/': o_dir = o_dir[:-1]
+            tid = o_dir.split("/")[-1]
+            track_log = f"{o_dir}/track.log"
+            os.system(f"mkdir -p {o_dir}")
         elif flags.command[0] == 'mv':
             tid1, tid = flags.command[1], flags.command[2]
-            track_log = f"{tid1}/track.log"
-            record = torch.load(f"{tid1}/track.log")
-            if not os.path.isdir(tid1):
-                # update tid if name is changed
+            name_change = not os.path.exists(tid)
+            os.system(f"mv {tid1} {tid}")
+
+            if name_change:
+                if tid[-1] == '/': tid = tid[:-1]
+                track_log = f"{tid}/track.log"
+                record = torch.load(track_log)
                 record['tid'] = tid.split("/")[-1]
                 torch.save(record, track_log)
-            os.system(f"mv {tid1} {tid}")
+
             exit(0)
         else:
             # give a unique identifier directory
