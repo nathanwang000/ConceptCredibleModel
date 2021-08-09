@@ -35,7 +35,7 @@ from lib.models import MLP, LambdaNet, CCM, ConcatNet, CUB_Subset_Concept_Model,
 from lib.models import CUB_Noise_Concept_Model
 from lib.data import small_CUB, CUB, SubColumn, CUB_train_transform, CUB_test_transform
 from lib.data import SubAttr
-from lib.train import train, train_step_xyc
+from lib.train import train
 from lib.eval import get_output, test, plot_log, shap_net_x, shap_ccm_c, bootstrap
 from lib.utils import birdfile2class, birdfile2idx, is_test_bird_idx, get_bird_bbox, get_bird_class, get_bird_part, get_part_location, get_multi_part_location, get_bird_name
 from lib.utils import get_attribute_name, code2certainty, get_class_attributes, get_image_attributes, describe_bird
@@ -89,15 +89,15 @@ def get_args():
     return args
 
 def ccm(flags, attr_names, concept_model_path,
-        loader_xyc, loader_xyc_eval, loader_xyc_te, loader_xyc_val=None,
+        loader_xy, loader_xy_eval, loader_xy_te, loader_xy_val=None,
         independent=False, net_s=None,
         n_epochs=10, report_every=1, lr_step=1000,
         u_model_path=None,
         alpha=0, # regularizaiton strength
         device='cuda', savepath=None, use_aux=False):
     '''
-    loader_xyc_eval is the evaluation of loader_xyc
-    if loader_xyc_val: use early stopping, otherwise train for the number of epochs
+    loader_xy_eval is the evaluation of loader_xy
+    if loader_xy_val: use early stopping, otherwise train for the number of epochs
     
     independent: whether or not to train ccm independently
     '''
@@ -140,7 +140,7 @@ def ccm(flags, attr_names, concept_model_path,
     net.to(device)
 
     # print('task acc before training: {:.1f}%'.format(
-    #     run_test(net, loader_xyc_te) * 100))
+    #     run_test(net, loader_xy_te) * 100))
     
     # add regularization to both u and c
     # lambda o, y, o_c, c, o_u:
@@ -157,7 +157,7 @@ def ccm(flags, attr_names, concept_model_path,
     scheduler = lr_scheduler.StepLR(opt, step_size=lr_step)
 
     run_train = lambda **kwargs: train(
-        net, loader_xyc, opt, criterion=criterion,
+        net, loader_xy, opt, criterion=criterion,
         # shortcut specific
         shortcut_mode = flags.shortcut,
         shortcut_threshold = flags.threshold,
@@ -165,24 +165,23 @@ def ccm(flags, attr_names, concept_model_path,
         net_shortcut = net_s,
         # shortcut specific done
         independent=independent,
-        # train_step=train_step_xyc, # b/c not xyc
         n_epochs=n_epochs, report_every=report_every,
         device=device, savepath=savepath,
         scheduler=scheduler, **kwargs)
 
-    if loader_xyc_val:
+    if loader_xy_val:
         log  = run_train(
-            report_dict={'val acc': (lambda m: run_test(m, loader_xyc_val) * 100, 'max'),
-                         'train acc': (lambda m: run_test(m, loader_xyc_eval) * 100,
+            report_dict={'val acc': (lambda m: run_test(m, loader_xy_val) * 100, 'max'),
+                         'train acc': (lambda m: run_test(m, loader_xy_eval) * 100,
                                        'max')},
                     early_stop_metric='val acc')
     else:
         log = run_train(
-            report_dict={'test acc': (lambda m: run_test(m, loader_xyc_te) * 100, 'max'),
-                         'train acc': (lambda m: run_test(m, loader_xyc_eval) * 100,
+            report_dict={'test acc': (lambda m: run_test(m, loader_xy_te) * 100, 'max'),
+                         'train acc': (lambda m: run_test(m, loader_xy_eval) * 100,
                                        'max')})
 
-    print('task acc after training: {:.1f}%'.format(run_test(net, loader_xyc_te) * 100))
+    print('task acc after training: {:.1f}%'.format(run_test(net, loader_xy_te) * 100))
     return net
 
 if __name__ == '__main__':
@@ -211,14 +210,14 @@ if __name__ == '__main__':
     # accuracy
     acc_criterion = lambda o, y: (o.argmax(1) == y).float()
 
-    # dataset, note only x, y not xyc; todo: change the naming
+    # dataset, note only x, y not xyc
     subcolumn = lambda d: SubColumn(SubAttr(d, attr_names), ['x', 'y']) #, 'attr'])
     load = lambda d, shuffle: DataLoader(subcolumn(d), batch_size=32,
                                 shuffle=shuffle, num_workers=8)
-    loader_xyc = load(cub_train, True)
-    loader_xyc_val = load(cub_val, False)
-    loader_xyc_te = load(cub_test, False)
-    loader_xyc_eval = load(cub_train_eval, False)
+    loader_xy = load(cub_train, True)
+    loader_xy_val = load(cub_val, False)
+    loader_xy_te = load(cub_test, False)
+    loader_xy_eval = load(cub_train_eval, False)
     
     print(f"# train: {len(cub_train)}, # val: {len(cub_val)}, # test: {len(cub_test)}")
 
@@ -229,8 +228,8 @@ if __name__ == '__main__':
     
     run_train = lambda **kwargs:ccm(
         flags, attr_names, flags.c_model_path,
-        loader_xyc, loader_xyc_eval,
-        loader_xyc_te, net_s=net_s,
+        loader_xy, loader_xy_eval,
+        loader_xy_te, net_s=net_s,
         independent=flags.ind, alpha=flags.alpha,
         u_model_path = flags.u_model_path,
         n_epochs=flags.n_epochs, report_every=1,
@@ -247,16 +246,16 @@ if __name__ == '__main__':
     if flags.eval:
         print('task acc after training: {:.1f}%'.format(
             run_test(torch.load(f'{model_name}.pt'),
-                     loader_xyc_te) * 100))
+                     loader_xy_te) * 100))
     elif flags.retrain:
         cub_train = CUB_train_transform(Subset(cub, train_val_indices),
                                         mode=flags.transform)
         cub_train_eval = CUB_test_transform(Subset(cub, train_val_indices),
                                              mode=flags.transform)
-        loader_xyc = load(cub_train, True)
-        loader_xyc_eval = load(cub_train_eval, False)
+        loader_xy = load(cub_train, True)
+        loader_xy_eval = load(cub_train_eval, False)
 
         net = run_train()
     else:
-        net = run_train(loader_xyc_val=loader_xyc_val)
+        net = run_train(loader_xy_val=loader_xy_val)
         
