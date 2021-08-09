@@ -109,8 +109,6 @@ def cbm(flags, attr_names, concept_model_path,
 
     # fc = nn.Linear(len(attr_names), 200) # 200 bird classes    
     fc = MLP([len(attr_names), 30, 30, 200])
-    # todo: fix below
-    # fc = nn.Linear(len(attr_full_names) - flags.d_noise, 200) # 200 bird classes
 
     if independent:
         x2c = nn.Sequential(x2c, # transition,

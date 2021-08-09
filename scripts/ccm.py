@@ -110,8 +110,6 @@ def ccm(flags, attr_names, concept_model_path,
     
     d_x2u = 200 # give it a chance to learn standard model
     d_x2c = len(attr_names) # 108 concepts
-    # todo: fix below
-    # d_x2c = len(attr_full_names) - flags.d_noise # 108 concepts
     
     # known concept model
     x2c = torch.load(f'{RootPath}/{concept_model_path}.pt')
@@ -137,8 +135,8 @@ def ccm(flags, attr_names, concept_model_path,
     # combined model: could use 2 gpus to run if memory is an issue
     net_y = nn.Sequential(ConcatNet(dim=1), nn.Linear(d_x2c + d_x2u, 200))
     
-    # combined model: todo: should eventually u_no_grad=False 
-    net = CCM(x2c, x2u, net_y, c_no_grad=True, u_no_grad=True)
+    # combined model
+    net = CCM(x2c, x2u, net_y, c_no_grad=True, u_no_grad=False)
     net.to(device)
 
     # print('task acc before training: {:.1f}%'.format(

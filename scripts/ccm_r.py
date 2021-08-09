@@ -135,7 +135,7 @@ def ccm(flags, attr_names, concept_model_path,
         x2u.aux_logits = False
         # x2u.AuxLogits.fc = nn.Linear(768, d_x2u)
 
-    # combined model: todo: should eventually u_no_grad=False
+    # combined model
     net = CCM_res(cbm, x2u)
     net.to(device)
 

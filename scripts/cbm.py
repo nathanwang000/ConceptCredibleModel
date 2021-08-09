@@ -108,8 +108,6 @@ def cbm(flags, attr_names, concept_model_path,
     noise_transition = CUB_Noise_Concept_Model(flags.d_noise)
     
     fc = nn.Linear(len(attr_names), 200) # 200 bird classes
-    # todo: fix below
-    # fc = nn.Linear(len(attr_full_names) - flags.d_noise, 200) # 200 bird classes
 
     if independent:
         x2c = nn.Sequential(x2c, # transition,
