@@ -19,6 +19,7 @@ graphviz = "*"
 seaborn = "*"
 scikit-learn-extra = "*"
 sh = "*"
+pygraphviz = "*"
 
 [requires]
 python_version = "3.7"
