@@ -1,9 +1,9 @@
 digraph {
 	graph [rankdir=BT]
-	X [label="X=[C, U1, U2, S]" fillcolor=lightgray style=filled]
+	X [label="X=[C, U1, S]" fillcolor=lightgray style=filled]
 	C [label="C ~ N(0,1)" fillcolor=lightgray style=filled]
-	Y [label="Y=U1" fillcolor=lightgray style=filled]
-	U [label="U1=C+0.1*U2"]
+	Y [label="Y=(U1>0)" fillcolor=lightgray style=filled]
+	U [label="U1=C+0.4*U2"]
 	Z [label="U2 ~ N(0, 1)"]
 	S [label="S=U2"]
 	U -> Y
@@ -12,6 +12,5 @@ digraph {
 	U -> X
 	S -> X
 	C -> X
-	Z -> X
 	Z -> S [style=dashed]
 }
