@@ -3,7 +3,7 @@ import torch.nn as nn
 import types
 
 ####
-from lib.utils import attribute2idx
+from lib.utils import attribute2idx, dfs_freeze
 
 class MLP(nn.Module):
 
@@ -40,6 +40,17 @@ class ConcatNet(nn.Module):
 
     def forward(self, args):
         return torch.cat(args, dim=self.dim)
+
+class SubColumnNet(nn.Module):
+    def __init__(self, columns):
+        '''
+        get subset of input
+        '''
+        super().__init__()
+        self.columns = columns
+
+    def forward(self, x):
+        return x[:, self.columns]
 
 ######### specific models
 class CUB_Subset_Concept_Model(nn.Module):
@@ -100,6 +111,10 @@ class CCM(nn.Module):
         self.net_y = net_y
         self.c_no_grad = c_no_grad
         self.u_no_grad = u_no_grad
+        if c_no_grad:
+            dfs_freeze(self.net_c)
+        if u_no_grad:
+            dfs_freeze(self.net_u)            
 
     def get_oc(self, x):
 
@@ -135,6 +150,7 @@ class CCM_res(nn.Module):
     def __init__(self, net1, net2): 
         super().__init__()
         self.net1 = net1
+        dfs_freeze(self.net1)
         self.net2 = net2
 
     def forward(self, x):
@@ -155,6 +171,8 @@ class CBM(nn.Module):
         self.net_c = net_c
         self.net_y = net_y
         self.c_no_grad = c_no_grad
+        if c_no_grad:
+            dfs_freeze(self.net_c)
 
     def get_oc(self, x):
         if self.c_no_grad:

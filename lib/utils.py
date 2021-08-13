@@ -12,7 +12,8 @@ def dfs_freeze(model):
     '''
     for name, child in model.named_children():
         for param in child.parameters():
-            param.requires_grad = False
+            param.requires_grad = False # doesn't matter
+            param.grad = None
         dfs_freeze(child)
                                             
 ##### CUB specific utilities
