@@ -113,8 +113,6 @@ def ccm(flags, attr_names, concept_model_path,
     
     # known concept model: note here is a cbm model
     cbm = torch.load(f'{RootPath}/{concept_model_path}.pt')
-    cbm.eval()
-    dfs_freeze(cbm)
     
     # x2c.aux_logits = False
 

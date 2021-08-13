@@ -136,10 +136,12 @@ class CCM_res(nn.Module):
         super().__init__()
         self.net1 = net1
         self.net2 = net2
-        # todo: maybe net1 should freeze here
 
     def forward(self, x):
-        return self.net1(x) + self.net2(x)
+        with torch.no_grad():
+            self.net1.eval()
+            o = self.net1(x)
+        return o + self.net2(x)
     
 class CBM(nn.Module):
     '''
