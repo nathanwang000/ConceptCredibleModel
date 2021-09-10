@@ -1,5 +1,5 @@
 '''
-this files trains an sequential or independent CBM
+this files trains CCM EYE
 '''
 import sys, os
 import tqdm
@@ -40,10 +40,13 @@ from lib.eval import get_output, test, plot_log, shap_net_x, shap_ccm_c, bootstr
 from lib.utils import birdfile2class, birdfile2idx, is_test_bird_idx, get_bird_bbox, get_bird_class, get_bird_part, get_part_location, get_multi_part_location, get_bird_name
 from lib.utils import get_attribute_name, code2certainty, get_class_attributes, get_image_attributes, describe_bird
 from lib.utils import get_attr_names
-from lib.regularization import EYE
+from lib.regularization import EYE, wL2
 
 def get_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--reg', default='eye',
+                        choices=['eye', 'wl2'],
+                        help='regularization type [eye, wl2], default eye')
     parser.add_argument("-o", "--outputs_dir", default=f"outputs",
                         help="where to save all the outputs")
     parser.add_argument("--eval", action="store_true",
@@ -151,8 +154,16 @@ def ccm(flags, attr_names, concept_model_path,
     # make sure the 3 losses are at the same scale (is there a research question?)
     # and let dataset give x, y, c
     r = torch.cat([torch.ones(d_x2c), torch.zeros(d_x2u)]).to(device)
-    criterion = lambda o_y, y, o_c, c, o_u: F.cross_entropy(o_y, y) + \
-        alpha * EYE(r, net_y[1].weight.abs().sum(0))
+
+    if flags.reg == 'eye':
+        criterion = lambda o_y, y, o_c, c, o_u: F.cross_entropy(o_y, y) + \
+            alpha * EYE(r, net_y[1].weight.abs().sum(0))
+    elif flags.reg == 'wl2':
+        criterion = lambda o_y, y, o_c, c, o_u: F.cross_entropy(o_y, y) + \
+            alpha * wL2(r, net_y[1].weight.abs().sum(0))
+    else:
+        raise Exception(f"not implemented {flags.reg}")
+        
     
     # train
     opt = optim.SGD(net.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0004)

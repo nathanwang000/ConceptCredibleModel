@@ -1,0 +1,14 @@
+digraph {
+	graph [rankdir=BT]
+	Y [label="Y=a*C + b*U)" fillcolor=lightgray style=filled]
+	C [label="C ~ N(0,1)" fillcolor=lightgray style=filled]
+	U [label="U ~ N(0,1)"]
+	S [label="S=Y"]
+	X [label="X=[C, U, S]" fillcolor=lightgray style=filled]
+	U -> Y
+	C -> Y
+	U -> X
+	C -> X
+	S -> X
+	Y -> S [style=dashed]
+}
