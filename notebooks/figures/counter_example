@@ -3,9 +3,11 @@ digraph {
 	X [label="X=[C, U1, S]" fillcolor=lightgray style=filled]
 	C [label="C ~ N(0,1)" fillcolor=lightgray style=filled]
 	Y [label="Y=(U1>0)" fillcolor=lightgray style=filled]
-	U [label="U1=C+0.4*U2"]
+	nS [label="nS ~ 0.1 N(0, 1)"]
+	nU [label="nU ~ 0.1 N(0, 1)"]
+	U [label="U1=C+0.4*U2+nU"]
 	Z [label="U2 ~ N(0, 1)"]
-	S [label="S=U2"]
+	S [label="S=U2+nS"]
 	U -> Y
 	C -> U
 	Z -> U
@@ -13,4 +15,6 @@ digraph {
 	S -> X
 	C -> X
 	Z -> S [style=dashed]
+	nU -> U
+	nS -> S
 }
