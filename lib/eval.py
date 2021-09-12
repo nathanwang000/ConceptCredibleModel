@@ -67,17 +67,16 @@ def test(net, loader, criterion, device='cpu', **kwargs):
     net.train()
     return sum(losses) / total
 
-def plot_log(log, key="loss", semi_y=False, ylabel=None):
+def plot_log(log, key="loss", semi_y=False, label=None):
     '''log is train log [{epoch: xxx, loss: xxx}]'''
-    ylabel = ylabel if ylabel else key
     x = [item['epoch'] for item in log]
     y = [item[key] for item in log]
     if semi_y:
-        plt.semilogy(x, y, label=ylabel)
+        plt.semilogy(x, y, label=label)
     else:
-        plt.plot(x, y, label=ylabel)
+        plt.plot(x, y, label=label)
     plt.xlabel('epochs', fontsize=15)
-    plt.ylabel(ylabel, fontsize=15)
+    plt.ylabel(key, fontsize=15)
 
 
 def shap_net_x(net, shap_x, bs, instance_idx=None, output_idx=None, decimal=2, output_name="hat Y"):
