@@ -3,8 +3,8 @@ import os
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=['ccm', 'cbm', 'ccmr'],
-                        help="ccm or cbm or ccmr")
+    parser.add_argument("mode", choices=['ccm', 'cbm', 'ccmr', 'std'],
+                        help="ccm or cbm or ccmr or std")
     parser.add_argument("o", help="where's the model directory eg. outputs/tid/")
     parser.add_argument("-s", "--shortcut",
                         default="outputs/aca36656e58e11ebb773ac1f6b24a434/cbm.pt",
@@ -22,7 +22,8 @@ if __name__ == '__main__':
     base_command = ['python',
                     {'ccm': 'scripts/ccm.py',
                      'cbm': 'scripts/cbm.py',
-                     'ccmr': 'scripts/ccm_r.py'
+                     'ccmr': 'scripts/ccm_r.py',
+                     'std': 'scripts/standard_model.py'
                     }[flags.mode],
                     '--eval',
                     '-o', flags.o,
@@ -36,6 +37,8 @@ if __name__ == '__main__':
         command = base_command + ['-s', shortcut]
         if shortcut == 'noise':
             command += ['-t', '0']
+        else:
+            command += ['-t', '1']
 
         command = " ".join(command)
         print(command)
