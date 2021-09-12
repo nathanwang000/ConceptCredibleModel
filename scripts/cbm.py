@@ -1,5 +1,5 @@
 '''
-this files trains a sequential or independent CBM
+this files trains a CBM
 '''
 import sys, os
 import tqdm
@@ -32,7 +32,7 @@ RootPath = os.path.dirname(FilePath)
 if RootPath not in sys.path: # parent directory
     sys.path = [RootPath] + sys.path
 from lib.models import MLP, CUB_Subset_Concept_Model, CBM, LambdaNet
-from lib.models import CUB_Noise_Concept_Model
+from lib.models import CUB_Noise_Concept_Model, Concat_CS_Model
 from lib.data import small_CUB, CUB, SubColumn, CUB_train_transform, CUB_test_transform
 from lib.data import SubAttr
 from lib.train import train, train_step_xyc
@@ -47,6 +47,8 @@ def get_args():
                         help="where to save all the outputs")
     parser.add_argument("--eval", action="store_true",
                         help="whether or not to eval the learned model")
+    parser.add_argument("--add_s", action="store_true",
+                        help="add S to C in concept prediction (Q5)")
     parser.add_argument("--ind", action="store_true",
                         help="whether or not to train independent CBM")
     parser.add_argument("--retrain", action="store_true",
@@ -106,17 +108,22 @@ def cbm(flags, attr_names, concept_model_path,
     transition = CUB_Subset_Concept_Model(attr_names, attr_full_names)
     # add irrelevant concept to simulate wrong expert    
     noise_transition = CUB_Noise_Concept_Model(flags.d_noise)
-    
-    fc = nn.Linear(len(attr_names), 200) # 200 bird classes
-
-    if independent:
-        x2c = nn.Sequential(x2c, # transition,
-                            noise_transition, nn.Sigmoid())
-        # x2c = nn.Sequential(x2c, # transition, 
-        #                     noise_transition, LambdaNet(binary_sigmoid))
-    else:
+    # add CS model to test if S add additional information Q5
+    if flags.add_s:
+        # don't support indepent yet; not the paper's point
         x2c = nn.Sequential(x2c, # transition,
                             noise_transition)
+        x2c = Concat_CS_Model(x2c, net_s, flags.n_shortcuts)
+        fc = nn.Linear(len(attr_names) + flags.n_shortcuts, 200)
+    else:
+        fc = nn.Linear(len(attr_names), 200) # 200 bird classes
+
+        if independent:
+            x2c = nn.Sequential(x2c, # transition,
+                                noise_transition, nn.Sigmoid())
+        else:
+            x2c = nn.Sequential(x2c, # transition,
+                                noise_transition)
         
     net = CBM(x2c, fc, c_no_grad=True) # default to sequential CBM
     net.to(device)

@@ -110,7 +110,7 @@ def ccm(flags, attr_names, concept_model_path,
     assert len(attr_full_names) == 108, "108 features required"
     # use subset of attributes: don't need transition b/c it was jointly trained    
     transition = CUB_Subset_Concept_Model(attr_names, attr_full_names)
-    # add irrelevant concept to simulate wrong expert    
+    # add irrelevant concept to simulate wrong expert
     noise_transition = CUB_Noise_Concept_Model(flags.d_noise)
     
     d_x2u = 200 # give it a chance to learn standard model

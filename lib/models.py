@@ -77,7 +77,28 @@ class CUB_Noise_Concept_Model(nn.Module):
         d = min(d, self.d)
         noise = torch.randn(bs, d).to(x.device)
         return torch.cat((noise, x[:, d:]), 1)
-        
+
+class Concat_CS_Model(nn.Module):
+    '''
+    in addition to C, concatenate S to the model
+    
+    net_s is the shortcut model
+    net is the main branch of the model
+    '''
+    def __init__(self, net, net_s, n_shortcuts):
+        super().__init__()
+        self.net_s = net_s
+        self.net = net
+        self.n_shortcuts = n_shortcuts
+
+    def forward(self, x):
+        o = self.net(x)
+        with torch.no_grad():
+            self.net_s.eval()
+            shortcut_level = self.net_s(x).argmax(1) % self.n_shortcuts # (bs,)
+            s = torch.nn.functional.one_hot(shortcut_level, num_classes=self.n_shortcuts)
+        return torch.cat((s, o), 1)
+    
 class GT_CUB_Subset_Concept_Model(nn.Module):
     '''
     ground truth concept model but subset of concepts in CUB
