@@ -59,8 +59,8 @@ def get_args():
                         help="retrain using all train val data")
     parser.add_argument("--seed", type=int, default=42,
                         help="seed for reproducibility")
-    parser.add_argument("--u_no_grad", action="store_true",
-                        help="option for ccm eye to fix gradient for f_u")
+    parser.add_argument("--u_grad", action="store_true",
+                        help="option for ccm eye to not fix gradient for f_u")
     parser.add_argument("--transform", default="cbm",
                         help="transform mode to use")
     parser.add_argument("--d_noise", default=0, type=int,
@@ -141,7 +141,7 @@ def ccm(flags, attr_names, concept_model_path,
     net_y = nn.Sequential(ConcatNet(dim=1), nn.Linear(d_x2c + d_x2u, 200))
     
     # combined model:
-    net = CCM(x2c, x2u, net_y, c_no_grad=True, u_no_grad=flags.u_no_grad)
+    net = CCM(x2c, x2u, net_y, c_no_grad=True, u_no_grad=not flags.u_grad)
     net.to(device)
 
     # print('task acc before training: {:.1f}%'.format(
