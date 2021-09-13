@@ -5,6 +5,7 @@ import matplotlib.patches as patches
 from PIL import Image
 import matplotlib
 import numpy as np
+import torch
 
 def dfs_freeze(model):
     ''' 
@@ -17,6 +18,27 @@ def dfs_freeze(model):
         dfs_freeze(child)
                                             
 ##### CUB specific utilities
+def get_shortcut_level(y, threshold, n_shortcuts):
+    '''
+    y: either sequence of 1 element, it can be a prediction 
+    or actual y
+    threshold: threshold between 0 and 1
+    n_shortcuts: number of shortcuts
+    '''
+    assert 0 <= threshold <= 1, "threshold should be in [0, 1]"
+    
+    z = torch.rand(1)
+    if z < threshold:
+            shortcut_level = y % n_shortcuts
+    else:
+        if isinstance(y, Iterable):
+            # batch version
+            shortcut_level = torch.from_numpy(np.random.choice(n_shortcuts,
+                                                               len(y))).long()
+        else:
+            shortcut_level = np.random.choice(n_shortcuts)
+    return shortcut_level
+    
 def get_attr_names(fn):
     # attributes to use
     attr_names = []

@@ -3,7 +3,7 @@ import torch.nn as nn
 import types
 
 ####
-from lib.utils import attribute2idx, dfs_freeze
+from lib.utils import attribute2idx, dfs_freeze, get_shortcut_level
 
 class MLP(nn.Module):
 
@@ -84,18 +84,23 @@ class Concat_CS_Model(nn.Module):
     
     net_s is the shortcut model
     net is the main branch of the model
+    threshold: threshold as in utils:get_shortcut_level
     '''
-    def __init__(self, net, net_s, n_shortcuts):
+    def __init__(self, net, net_s, n_shortcuts, threshold=1.0):
         super().__init__()
         self.net_s = net_s
         self.net = net
         self.n_shortcuts = n_shortcuts
+        self.threshold = threshold
 
     def forward(self, x):
         o = self.net(x)
         with torch.no_grad():
             self.net_s.eval()
-            shortcut_level = self.net_s(x).argmax(1) % self.n_shortcuts # (bs,)
+            # (bs,)
+            shortcut_level = get_shortcut_level(self.net_s(x).argmax(1),
+                                                self.threshold,
+                                                self.n_shortcuts)
             s = torch.nn.functional.one_hot(shortcut_level, num_classes=self.n_shortcuts)
         return torch.cat((s, o), 1)
     

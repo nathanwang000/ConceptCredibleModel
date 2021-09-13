@@ -12,7 +12,7 @@ from torchvision.transforms import GaussianBlur, CenterCrop, ColorJitter, Graysc
 # torch.multiprocessing.set_start_method('spawn') # only useful when cuda need inside transform
 
 # custom
-from lib.utils import birdfile2class, attribute2idx, get_class_attributes, get_image_attributes, get_attribute_name, birdfile2idx
+from lib.utils import birdfile2class, attribute2idx, get_class_attributes, get_image_attributes, get_attribute_name, birdfile2idx, get_shortcut_level
 
 class SubColumn(Dataset):
     '''
@@ -246,7 +246,7 @@ class CUB(Dataset):
 
 ###### shortcut transforms
 def shortcut_noise_transform(x, y, n_shortcuts, sigma_max=0.1, threshold=0,
-                                    shortcut_level=None):
+                             shortcut_level=None):
     '''
     x: input to transform (bs, *) or (*)
     y: noise depend on this variable (bs,) or int or float
@@ -255,21 +255,12 @@ def shortcut_noise_transform(x, y, n_shortcuts, sigma_max=0.1, threshold=0,
     shortcut_level: manual shortcut level for debug
     return transformed x
     '''
-    assert 0 <= threshold <= 1, "threshold should be in [0, 1]"
     assert n_shortcuts <= 200, "shortcut classes <= 200"
 
     sigmas = torch.linspace(0, sigma_max, n_shortcuts)
-    z = torch.rand(1)
+
     if shortcut_level is None:
-        if z < threshold:
-            shortcut_level = y % n_shortcuts
-        else:
-            if isinstance(y, Iterable):
-                # batch version
-                shortcut_level = torch.from_numpy(np.random.choice(n_shortcuts,
-                                                                   len(y))).long()
-            else:
-                shortcut_level = np.random.choice(n_shortcuts)
+        shortcut_level = get_shortcut_level(y, threshold, n_shortcuts)
             
     with torch.no_grad():
         sigma = sigmas[shortcut_level] # (bs,) or 1
