@@ -225,8 +225,20 @@ if __name__ == '__main__':
                        net_shortcut = net_s)
     
     if flags.eval:
+        net = torch.load(f'{model_name}.pt')
+
+        for m in net.modules():
+            if type(m) == Concat_CS_Model:
+                print("addS experiment!")
+                if net_s is None: # assume clean
+                    # 200 CUB classes
+                    net_s = LambdaNet(lambda x: torch.zeros(x.shape[0], 200).cuda())
+                m.net_s = net_s
+                m.n_shortcuts = flags.n_shortcuts
+                m.threshold = flags.threshold
+
         print('task acc after training: {:.1f}%'.format(
-            run_test(torch.load(f'{model_name}.pt'),
+            run_test(net,
                      loader_xyc_te) * 100))
     elif flags.retrain:
         cub_train = CUB_train_transform(Subset(cub, train_val_indices),

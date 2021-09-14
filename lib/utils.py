@@ -6,6 +6,7 @@ from PIL import Image
 import matplotlib
 import numpy as np
 import torch
+from collections.abc import Iterable
 
 def dfs_freeze(model):
     ''' 
