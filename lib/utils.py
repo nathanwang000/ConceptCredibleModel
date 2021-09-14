@@ -37,8 +37,8 @@ def get_shortcut_level(y, threshold, n_shortcuts):
             shortcut_level = torch.from_numpy(np.random.choice(n_shortcuts,
                                                                len(y))).long()
         else:
-            shortcut_level = np.random.choice(n_shortcuts)
-    return shortcut_level
+            shortcut_level = torch.from_numpy(np.random.choice(n_shortcuts))
+    return shortcut_level.to(y.device)
     
 def get_attr_names(fn):
     # attributes to use
