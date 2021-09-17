@@ -49,6 +49,8 @@ def get_args():
                         help="whether or not to eval the learned model")
     parser.add_argument("--add_s", action="store_true",
                         help="add S to C in concept prediction (Q5)")
+    parser.add_argument("--add_t", default=1.0, type=float,
+                        help="threshold for adding S to C in concept prediction (Q4)")
     parser.add_argument("--ind", action="store_true",
                         help="whether or not to train independent CBM")
     parser.add_argument("--retrain", action="store_true",
@@ -113,7 +115,8 @@ def cbm(flags, attr_names, concept_model_path,
         # don't support indepent yet; not the paper's point
         x2c = nn.Sequential(x2c, # transition,
                             noise_transition)
-        x2c = Concat_CS_Model(x2c, net_s, flags.n_shortcuts)
+        x2c = Concat_CS_Model(x2c, net_s, flags.n_shortcuts,
+                              threshold=flags.add_t)
         fc = nn.Linear(len(attr_names) + flags.n_shortcuts, 200)
     else:
         fc = nn.Linear(len(attr_names), 200) # 200 bird classes
