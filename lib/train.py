@@ -7,13 +7,26 @@ import torch
 from lib.models import CBM, CCM
 from lib.data import CUB_shortcut_transform
 
+def train_step_shortcut(net, loader, opt, criterion, device='cpu', **kwargs):
+    '''train 1 step of standard model with shortcut in the critierion'''
+    losses = []    
+    for x, y in tqdm.tqdm(loader, desc="train step for 1 epoch"):
+        x, y = x.to(device), y.to(device)
+        x, s = CUB_shortcut_transform(x, y, **kwargs)
+        opt.zero_grad()
+        o = net(x)
+        l = criterion(o, y, s).mean()
+        l.backward()
+        opt.step()
+        losses.append(l.detach().item())
+    return losses
+
 def train_step_standard(net, loader, opt, criterion, device='cpu', **kwargs):
     '''train 1 step of standard model'''
     losses = []    
     for x, y in tqdm.tqdm(loader, desc="train step for 1 epoch"):
         x, y = x.to(device), y.to(device)
-        x = CUB_shortcut_transform(x, y, **kwargs)
-        
+        x, s = CUB_shortcut_transform(x, y, **kwargs)
         opt.zero_grad()
         o = net(x)
         l = criterion(o, y).mean()
@@ -21,7 +34,7 @@ def train_step_standard(net, loader, opt, criterion, device='cpu', **kwargs):
         opt.step()
         losses.append(l.detach().item())
     return losses
-    
+
 def train_step_xyc(net, loader, opt, criterion, independent=False, device='cpu',
                    **kwargs):
     '''
@@ -33,7 +46,7 @@ def train_step_xyc(net, loader, opt, criterion, independent=False, device='cpu',
     
     for x, y, c in tqdm.tqdm(loader, desc="train step for 1 epoch xyc"):
         x, y, c = x.to(device), y.to(device), c.to(device).float()
-        x = CUB_shortcut_transform(x, y, **kwargs)
+        x, s = CUB_shortcut_transform(x, y, **kwargs)
         opt.zero_grad()
 
         if type(net) == CBM:

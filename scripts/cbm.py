@@ -49,8 +49,6 @@ def get_args():
                         help="whether or not to eval the learned model")
     parser.add_argument("--add_s", action="store_true",
                         help="add S to C in concept prediction (Q5)")
-    parser.add_argument("--add_t", default=1.0, type=float,
-                        help="threshold for adding S to C in concept prediction (Q4)")
     parser.add_argument("--ind", action="store_true",
                         help="whether or not to train independent CBM")
     parser.add_argument("--retrain", action="store_true",

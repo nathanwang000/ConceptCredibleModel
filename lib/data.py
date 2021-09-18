@@ -271,20 +271,20 @@ def shortcut_noise_transform(x, y, n_shortcuts, sigma_max=0.1, threshold=0,
             .transpose(0, -1)
     else:
         x = x + sigma * torch.randn_like(x)
-    return x
+    return x, shortcut_level
 
 def CUB_shortcut_transform(x, y, **kwargs):
     if 'shortcut_mode' not in kwargs: return x
     mode = kwargs['shortcut_mode']
     if mode == 'clean':
-        return x
+        return x, torch.zeros(x.shape[0]).to(x.device)
     elif mode == 'noise':
-        x = shortcut_noise_transform(x, y,
-                                     n_shortcuts=kwargs['n_shortcuts'],
-                                     threshold=kwargs['shortcut_threshold'])
+        x, s = shortcut_noise_transform(x, y,
+                                        n_shortcuts=kwargs['n_shortcuts'],
+                                        threshold=kwargs['shortcut_threshold'])
     else:
-        x = shortcut_noise_transform(x, kwargs['net_shortcut'](x).argmax(1),
-                                     n_shortcuts=kwargs['n_shortcuts'],
-                                     threshold=kwargs['shortcut_threshold'])
-    return x
+        x, s = shortcut_noise_transform(x, kwargs['net_shortcut'](x).argmax(1),
+                                        n_shortcuts=kwargs['n_shortcuts'],
+                                        threshold=kwargs['shortcut_threshold'])
+    return x, s
     

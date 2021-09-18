@@ -61,6 +61,8 @@ def get_args():
                         help="shortcut threshold to use (1 always Y dependent, 0 ind)")
     parser.add_argument("--n_shortcuts", default=10, type=int,
                         help="number of shortcuts")
+    parser.add_argument("--init_model_path", type=str, default="",
+                        help="model intialization, if None then train from scratch")
     # other training stuff
     parser.add_argument("--lr_step", type=int, default=15,
                         help="learning rate decay steps")
@@ -81,22 +83,24 @@ def standard_model(flags, loader_xy, loader_xy_eval, loader_xy_te, loader_xy_val
     if loader_xy_val: use early stopping, otherwise train for the number of epochs
     '''
     # regular model
-    net = torch.hub.load('pytorch/vision:v0.9.0', 'inception_v3', pretrained=True)
-    net.fc = nn.Linear(2048, 200) # 200 bird classes
-    net.AuxLogits.fc = nn.Linear(768, 200)
-    net.to(device)
-
-    # print('task acc before training: {:.1f}%'.format(
-    #     run_test(net, loader_xy_te) * 100))
-    
-    if use_aux:
-        # for inception module where o[1] is auxilliary input to avoid vanishing
-        # gradient https://stats.stackexchange.com/questions/274286/google-inception-modelwhy-there-is-multiple-softmax
-        # https://discuss.pytorch.org/t/why-auxiliary-logits-set-to-false-in-train-mode/40705
-        criterion = lambda o, y: F.cross_entropy(o[0], y) + \
-            0.4 * F.cross_entropy(o[1], y)
+    if len(flags.init_model_path) != 0:
+        net = torch.load(flags.init_model_path)
+        criterion = lambda o, y: F.cross_entropy(o, y)
     else:
-        criterion = lambda o, y: F.cross_entropy(o[0], y)
+        net = torch.hub.load('pytorch/vision:v0.9.0',
+                             'inception_v3', pretrained=True)
+        net.fc = nn.Linear(2048, 200) # 200 bird classes
+        net.AuxLogits.fc = nn.Linear(768, 200)
+        net.to(device)
+
+        if use_aux:
+            # for inception module where o[1] is auxilliary input to avoid vanishing
+            # gradient https://stats.stackexchange.com/questions/274286/google-inception-modelwhy-there-is-multiple-softmax
+            # https://discuss.pytorch.org/t/why-auxiliary-logits-set-to-false-in-train-mode/40705
+            criterion = lambda o, y: F.cross_entropy(o[0], y) + \
+                0.4 * F.cross_entropy(o[1], y)
+        else:
+            criterion = lambda o, y: F.cross_entropy(o[0], y)
     
     # train
     opt = optim.SGD(net.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0004)

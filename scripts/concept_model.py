@@ -34,7 +34,7 @@ if RootPath not in sys.path: # parent directory
 from lib.models import MLP
 from lib.data import small_CUB, CUB, SubColumn, CUB_train_transform, CUB_test_transform
 from lib.data import SubAttr
-from lib.train import train
+from lib.train import train, train_step_shortcut
 from lib.eval import get_output, test, plot_log, shap_net_x, shap_ccm_c, bootstrap
 from lib.utils import birdfile2class, birdfile2idx, is_test_bird_idx, get_bird_name
 from lib.utils import get_bird_bbox, get_bird_class, get_bird_part, get_part_location
@@ -45,6 +45,8 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-o", "--outputs_dir", default=f"outputs",
                         help="where to save all the outputs")
+    parser.add_argument("--add_s", type=float, default=0,
+                        help="add S to C in the objective")
     parser.add_argument("--eval", action="store_true",
                         help="whether or not to eval the learned model")
     parser.add_argument("--retrain", action="store_true",
@@ -53,8 +55,8 @@ def get_args():
                         help="seed for reproducibility")
     parser.add_argument("--transform", default="cbm",
                         help="transform mode to use")
-    parser.add_argument("--d_concepts", default=0, type=int,
-                        help="number of concepts to learn")
+    # parser.add_argument("--d_concepts", default=0, type=int,
+    #                     help="number of concepts to learn")
     parser.add_argument("--lr_step", type=int, default=1000,
                         help="learning rate decay steps")
     parser.add_argument("--n_epochs", type=int, default=100,
@@ -84,7 +86,7 @@ def calc_imbalance(train_dataset):
         n_ones += d['attr']
     return (total / n_ones) - 1
     
-def concept_model(n_attrs, loader_xy, loader_xy_eval, loader_xy_te, loader_xy_val=None,
+def concept_model(flags, n_attrs, loader_xy, loader_xy_eval, loader_xy_te, loader_xy_val=None,
                   n_epochs=10, report_every=1, lr_step=1000, net_s=None,
                   device='cuda', savepath=None, use_aux=False,
                   imbalance_ratio=None):
@@ -97,19 +99,25 @@ def concept_model(n_attrs, loader_xy, loader_xy_eval, loader_xy_te, loader_xy_va
     net = torch.hub.load('pytorch/vision:v0.9.0', 'inception_v3', pretrained=True)
     net.fc = nn.Linear(2048, n_attrs)
     net.AuxLogits.fc = nn.Linear(768, n_attrs)
+    net.pred_s = nn.Linear(n_attrs, flags.n_shortcuts)    
     net.to(device)
     imbalance_ratio = imbalance_ratio.to(device)
     # print('task acc before training: {:.1f}%'.format(
     #     run_test(net, loader_xy_te) * 100))
 
+
     if use_aux:
         # for inception module where o[1] is auxilliary input to avoid vanishing
         # gradient https://stats.stackexchange.com/questions/274286/google-inception-modelwhy-there-is-multiple-softmax
         # https://discuss.pytorch.org/t/why-auxiliary-logits-set-to-false-in-train-mode/40705
-        criterion = lambda o, y: F.binary_cross_entropy_with_logits(o[0], y.float(), pos_weight=imbalance_ratio) + \
+        criterion_ = lambda o, y: F.binary_cross_entropy_with_logits(o[0], y.float(), pos_weight=imbalance_ratio) + \
             0.4 * F.binary_cross_entropy_with_logits(o[1], y.float(), pos_weight=imbalance_ratio)
     else:
-        criterion = lambda o, y: F.binary_cross_entropy_with_logits(o[0], y.float(), pos_weight=imbalance_ratio) # the paper uses weight which doesn't make sense
+        # the cbm paper uses weight which doesn't make sense
+        criterion_ = lambda o, y: F.binary_cross_entropy_with_logits(o[0], y.float(), pos_weight=imbalance_ratio)
+
+    # use o to predict s
+    criterion = lambda o, y, s: (1-flags.add_s) * criterion_(o, y) + flags.add_s * F.cross_entropy(net.pred_s(o[0]), s)
     
     # train
     opt = optim.SGD(net.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0004)
@@ -117,6 +125,7 @@ def concept_model(n_attrs, loader_xy, loader_xy_eval, loader_xy_te, loader_xy_va
 
     run_train = lambda **kwargs: train(
         net, loader_xy, opt, criterion=criterion,
+        train_step=train_step_shortcut, # this allows s to be accounted
         # shortcut specific
         shortcut_mode = flags.shortcut,
         shortcut_threshold = flags.threshold,
@@ -127,6 +136,7 @@ def concept_model(n_attrs, loader_xy, loader_xy_eval, loader_xy_te, loader_xy_va
         device=device, savepath=savepath,
         scheduler=scheduler, **kwargs)
 
+    # todo: add_s should remove early stop metric; maybe, see later
     if loader_xy_val:
         log  = run_train(
             report_dict={'val acc': (lambda m: run_test(m, loader_xy_val) * 100, 'max'),
@@ -161,8 +171,8 @@ if __name__ == '__main__':
     class_attributes = get_class_attributes()
     maj_concepts = class_attributes.loc[:, ((class_attributes >= 50).sum(0) >= 10)] >= 50 # CBM paper report 112 concepts; here is 108
     ind_maj_attr = list(maj_concepts.columns)
-    # only use first d_concepts number of concepts
-    ind_maj_attr = ind_maj_attr[:min(flags.d_concepts, len(ind_maj_attr))]
+    # # only use first d_concepts number of concepts
+    # ind_maj_attr = ind_maj_attr[:min(flags.d_concepts, len(ind_maj_attr))]
     print(f'we have {len(ind_maj_attr)} concepts to learn')
     
     # define dataset: cub_train_eval is used to evaluate training data
@@ -196,7 +206,7 @@ if __name__ == '__main__':
         net_s = None
 
     run_train = lambda **kwargs: concept_model(
-        len(ind_maj_attr), loader_xy, loader_xy_eval,
+        flags, len(ind_maj_attr), loader_xy, loader_xy_eval,
         loader_xy_te, net_s=net_s,
         n_epochs=flags.n_epochs, report_every=1,
         lr_step=flags.lr_step,
