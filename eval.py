@@ -29,13 +29,13 @@ if __name__ == '__main__':
                     '-o', flags.o,
                     '--n_shortcuts', str(flags.n_shortcuts)]
 
-    for shortcut in ['clean', 'noise', flags.shortcut]:
+    for i, shortcut in enumerate(['clean', 'noise', flags.shortcut]):
         print({'clean': 'clean acc',
                'noise': 't=0 acc',
                flags.shortcut: 't=1 acc'}[shortcut])
         
         command = base_command + ['-s', shortcut]
-        if shortcut == 'noise':
+        if i == 1: # 'noise'
             command += ['-t', '0']
         else:
             command += ['-t', '1']
