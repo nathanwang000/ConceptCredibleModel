@@ -114,7 +114,7 @@ def cbm(flags, attr_names, concept_model_path,
         x2c = nn.Sequential(x2c, # transition,
                             noise_transition)
         x2c = Concat_CS_Model(x2c, net_s, flags.n_shortcuts,
-                              threshold=flags.add_t)
+                              threshold=flags.t)
         fc = nn.Linear(len(attr_names) + flags.n_shortcuts, 200)
     else:
         fc = nn.Linear(len(attr_names), 200) # 200 bird classes
