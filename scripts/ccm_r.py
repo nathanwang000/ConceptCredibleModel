@@ -58,6 +58,8 @@ def get_args():
                         help="seed for reproducibility")
     parser.add_argument("--transform", default="cbm",
                         help="transform mode to use")
+    parser.add_argument("--wd", default=0.0004, type=float,
+                        help="weight decay for the model")
     parser.add_argument("--d_noise", default=0, type=int,
                         help="wrong expert dimensions (noise dimensions in c)")
     parser.add_argument("--lr_step", type=int, default=1000,
@@ -151,7 +153,7 @@ def ccm(flags, attr_names, concept_model_path,
     # * EYE(r, net_y[1].weight.abs().sum(0))
     
     # train
-    opt = optim.SGD(net.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0004)
+    opt = optim.SGD(net.parameters(), lr=0.01, momentum=0.9, weight_decay=flags.wd)
     scheduler = lr_scheduler.StepLR(opt, step_size=lr_step)
 
     run_train = lambda **kwargs: train(
