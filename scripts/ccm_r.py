@@ -72,7 +72,7 @@ def get_args():
                         default="gold_models/flip/concepts",
                         help="concept model path starting from root (ignore .pt)")
     parser.add_argument("--u_model_path", type=str,
-                        default="gold_models/crop/standard",
+                        default=None, # "gold_models/crop/standard",
                         help="unknown concept model path starting from root (ignore .pt), if None then train from scratch")
     parser.add_argument("--concept_path", type=str,
                         default="outputs/concepts/concepts_108.txt",
