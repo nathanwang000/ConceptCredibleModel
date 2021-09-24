@@ -11,6 +11,9 @@ def get_args():
                         help="which cbm to create the shortcut")
     parser.add_argument("-n", "--n_shortcuts", default=10, type=int,
                         help="number of shortcuts")
+    parser.add_argument("-t", "--threshold", default=1.0, type=float,
+                        help="threshold for using shortcut (1 is always use S)")
+    
     args = parser.parse_args()
     print(args)
     return args
@@ -38,7 +41,7 @@ if __name__ == '__main__':
         if i == 1: # 'noise'
             command += ['-t', '0']
         else:
-            command += ['-t', '1']
+            command += ['-t', str(flags.threshold)]
 
         command = " ".join(command)
         print(command)
