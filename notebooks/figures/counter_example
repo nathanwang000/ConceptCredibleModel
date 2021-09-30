@@ -1,20 +1,17 @@
 digraph {
 	graph [rankdir=BT]
-	X [label="X=[C, U1, S]" fillcolor=lightgray style=filled]
+	X [label="X=[C, U, S]" fillcolor=lightgray style=filled]
 	C [label="C ~ N(0,1)" fillcolor=lightgray style=filled]
-	Y [label="Y=(U1>0)" fillcolor=lightgray style=filled]
-	nS [label="nS ~ 0.1 N(0, 1)"]
-	nU [label="nU ~ 0.1 N(0, 1)"]
-	U [label="U1=C+0.4*U2+nU"]
-	Z [label="U2 ~ N(0, 1)"]
-	S [label="S=U2+nS"]
+	Y [label="Y=C+U" fillcolor=lightgray style=filled]
+	U [label="U=C+E"]
+	E [label="E ~ N(0, 1)"]
+	S [label="S=C"]
 	U -> Y
-	C -> U
-	Z -> U
-	U -> X
+	C -> Y
+	C -> S
+	E -> U
 	S -> X
 	C -> X
-	Z -> S [style=dashed]
-	nU -> U
-	nS -> S
+	U -> X
+	C -> U
 }
