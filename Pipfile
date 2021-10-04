@@ -20,6 +20,9 @@ seaborn = "*"
 scikit-learn-extra = "*"
 sh = "*"
 pygraphviz = "*"
+pyyaml = "*"
+scikit-image = "*"
+imgaug = "*"
 
 [requires]
 python_version = "3.7"

@@ -23,6 +23,18 @@ class MLP(nn.Module):
     def forward(self, x):
         return self.classifier(x)
 
+class ENS(nn.Module):
+    
+    def __init__(self, models):
+        '''
+        ensemble model
+        '''
+        super().__init__()
+        self.models = models
+        
+    def forward(self, x):
+        return sum([net(x) for net in self.models]) / len(self.models)
+    
 class LambdaNet(nn.Module):
     def __init__(self, lambd):
         super().__init__()
