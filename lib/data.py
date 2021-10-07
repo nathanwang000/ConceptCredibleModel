@@ -9,6 +9,7 @@ import os
 import pathlib
 import tqdm
 from torchvision.transforms import GaussianBlur, CenterCrop, ColorJitter, Grayscale, RandomCrop, RandomHorizontalFlip
+import pandas as pd
 # torch.multiprocessing.set_start_method('spawn') # only useful when cuda need inside transform
 
 # custom
@@ -184,6 +185,26 @@ class small_CUB(Dataset):
             ])
         x, y = preprocess(input_image), self.labels[idx]
         return self.transform(x, y), y
+
+class MIMIC(Dataset):
+    '''
+    mimic cxr dataset
+    task is a str that specifies a column in csv_file: e.g., Pneumonia
+    '''
+    def __init__(self, csv_file, task):
+        df = pd.read_csv(csv_file)
+        # mask unknown values
+        self.df = df[df[self.task] >= 0]
+        self.task = task
+
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, idx):
+        filename = self.df.iloc[idx].local_path
+        x = Image.open(filename)
+        y = self.iloc[idx][self.task]
+        return {"x": x, "y": y, "filename": filename}
     
 class CUB(Dataset):
     '''

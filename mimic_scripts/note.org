@@ -1,0 +1,37 @@
+File: mimic_ahrf.csv
+
+* train/valid/test: field 7 in the file
+#+BEGIN_SRC bash
+cut mimic_ahrf.csv -f 7 -d "," | head
+#+END_SRC
+
+number of (train, valid, test): 1190, 406, 392
+
+* target task: chf_scale # field 9 in the file
+number of (pos, neg): 225, 1763
+#+BEGIN_SRC bash
+cut mimic_ahrf.csv -f 9 -d ","| awk 'BEGIN{i=0} {if($1==0) i+=1} END{print i}'
+#+END_SRC
+
+#+BEGIN_SRC python
+return 225 + 1763, 1190 + 406 + 392, 225 / 1988
+#+END_SRC
+
+#+RESULTS:
+| 1988 | 1988 | 0.11317907444668009 |
+
+* source task 1: Pneumonia, field 12
+
+contains positive (1), negative (0), and unknown (-1) data, we will ignore the unknown diagnostic
+
+number of (1, 0, -1): (502, 125, 1361)
+
+potential problem: too little training data
+
+* source task 2: mimic initilaization
+
+checkpoint/mimic.pth.tar
+
+potential problem: mimic is trained on all tasks, C thus wouldn't be incomplete
+
+* source task3: mimic initialization only on pneumonia
