@@ -3,8 +3,8 @@ import os
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=['ccm', 'cbm', 'ccmr', 'std'],
-                        help="ccm or cbm or ccmr or std")
+    parser.add_argument("mode", choices=['ccm', 'cbm', 'ccmr', 'std', 'mtl'],
+                        help="ccm or cbm or ccmr or std or mtl")
     parser.add_argument("o", help="where's the model directory eg. outputs/tid/")
     parser.add_argument("-s", "--shortcut",
                         default="outputs/aca36656e58e11ebb773ac1f6b24a434/cbm.pt",
@@ -26,7 +26,8 @@ if __name__ == '__main__':
                     {'ccm': 'scripts/ccm.py',
                      'cbm': 'scripts/cbm.py',
                      'ccmr': 'scripts/ccm_r.py',
-                     'std': 'scripts/standard_model.py'
+                     'std': 'scripts/standard_model.py',
+                     'mtl': 'scripts/mtl.py',
                     }[flags.mode],
                     '--eval',
                     '-o', flags.o,

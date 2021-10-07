@@ -23,6 +23,34 @@ class MLP(nn.Module):
     def forward(self, x):
         return self.classifier(x)
 
+class MTL(nn.Module):
+    '''
+    custom multi-task-learng model
+    c_net: is the c model
+    net_base: base for network, shared for predict C and Y
+    net_c: use output of net_base to predict C
+    net_y: use output of net_base to predict Y
+
+    training mode: output y_hat, c_hat, c
+    test_mode: output y_hat
+    '''
+    def __init__(self, c_net, net_base, net_c, net_y):
+        super().__init__()
+        dfs_freeze(c_net) # don't update its parameter
+        self.c_net = c_net
+        self.net_base = net_base
+        self.net_c = net_c
+        self.net_y = net_y
+
+    def forward(self, x):
+        if self.training: # training mode
+            with torch.no_grad():
+                self.c_net.eval()
+                c = self.c_net(x)
+            o = self.net_base(x)
+            return self.net_y(o), self.net_c(o), c
+        return self.net_y(self.net_base(x))
+    
 class ENS(nn.Module):
     
     def __init__(self, models):
