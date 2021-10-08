@@ -141,12 +141,12 @@ if __name__ == '__main__':
     mimic = MIMIC(task) # mimic doesn't have validation data, chexpert has
     indices = list(range(len(mimic)))
     labels = list(mimic.df[task])
-    print(len(indices), len(labels))
+
     test_ratio = 0.2
     train_val_indices, test_indices, train_val_labels, _ = train_test_split(
         indices, labels, test_size=test_ratio, stratify=labels, random_state=flags.seed)
     val_ratio = 0.2
-    print(len(train_val_indices), len(train_val_labels))
+
     train_indices, val_indices = train_test_split(train_val_indices, test_size=val_ratio,
                                                   stratify=train_val_labels,
                                                   random_state=flags.seed)

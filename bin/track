@@ -27,6 +27,7 @@ assumes:
   [command] to run takes "--outputs_dir outputs/tid" as argument
 '''
 import argparse
+import tempfile
 from argparse import RawTextHelpFormatter
 import uuid
 import sys
@@ -146,12 +147,13 @@ if __name__ == "__main__":
         else:
             records = gather_log(o_dir, max_level=flags.report_level)
             message = gen_report(records)
-
         if flags.txt:
             print(message)
         else:
-            message = message.replace("%", "%%") # -R shows color
-            os.system(f"printf '{message}' | less -R")            
+            tmp = tempfile.NamedTemporaryFile()
+            with open(tmp.name, 'w') as f:
+                f.write(message)
+            os.system(f"cat {tmp.name} | less -R")
 
     else: # run the command        
         
