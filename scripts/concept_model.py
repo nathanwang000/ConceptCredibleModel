@@ -46,7 +46,7 @@ def get_args():
     parser.add_argument("-o", "--outputs_dir", default=f"outputs",
                         help="where to save all the outputs")
     parser.add_argument("--add_s", type=float, default=0,
-                        help="add S to C in the objective")
+                        help="add S to C in the objective (not useful; deprecated)")
     parser.add_argument("--eval", action="store_true",
                         help="whether or not to eval the learned model")
     parser.add_argument("--retrain", action="store_true",
@@ -136,7 +136,6 @@ def concept_model(flags, n_attrs, loader_xy, loader_xy_eval, loader_xy_te, loade
         device=device, savepath=savepath,
         scheduler=scheduler, **kwargs)
 
-    # todo: add_s should remove early stop metric; maybe, see later
     if loader_xy_val:
         log  = run_train(
             report_dict={'val acc': (lambda m: run_test(m, loader_xy_val) * 100, 'max'),
