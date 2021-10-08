@@ -1,5 +1,6 @@
 '''
-this file trains a standard model to either train (x, y) or (x, shortcut)
+this file trains a standard model on Pneumonia on MIMIC
+only different from standard_model.py is it uses MIMIC instead of MIMIC_ahrf
 '''
 import sys, os
 import tqdm
@@ -32,7 +33,7 @@ RootPath = os.path.dirname(FilePath)
 if RootPath not in sys.path: # parent directory
     sys.path = [RootPath] + sys.path
 from lib.models import MLP
-from lib.data import MIMIC_ahrf, SubColumn, MIMIC_train_transform, MIMIC_test_transform
+from lib.data import SubColumn, MIMIC_train_transform, MIMIC_test_transform
 from lib.data import MIMIC
 from lib.train import train
 from lib.eval import get_output, test_auc
@@ -131,7 +132,7 @@ if __name__ == '__main__':
     model_name = f"{RootPath}/{flags.outputs_dir}/standard"
     print(model_name)
 
-    mimic = MIMIC_ahrf('chf_scale')
+    mimic = MIMIC("Pneumonia")
     train_indices = [i for i in range(len(mimic)) if mimic.df.iloc[i]['split'] == 'train']
     val_indices = [i for i in range(len(mimic)) if mimic.df.iloc[i]['split'] == 'valid'] 
     test_indices = [i for i in range(len(mimic)) if mimic.df.iloc[i]['split'] == 'test']

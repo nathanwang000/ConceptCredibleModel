@@ -67,6 +67,20 @@ def test(net, loader, criterion, device='cpu', **kwargs):
     net.train()
     return sum(losses) / total
 
+@torch.no_grad()
+def test_auc(net, loader, device='cpu', **kwargs):
+    net.eval()
+    outputs, truths = [], []
+    for d in tqdm.tqdm(loader, desc="test eval"):
+        x, y = d[0], d[1] # assume the first 2 are x, y to accomendate xyc
+        x, y = x.to(device), y.to(device)
+        x, s = CUB_shortcut_transform(x, y, **kwargs)        
+        o = F.softmax(net(x), 1)[:, 1] # take the positive probability
+        outputs.append(o.detach().cpu().numpy())
+        truths.append(y.detach().cpu().numpy())
+    net.train()
+    return metrics.roc_auc_score(np.hstack(truths), np.hstack(outputs))
+
 def plot_log(log, key="loss", semi_y=False, label=None):
     '''log is train log [{epoch: xxx, loss: xxx}]'''
     x = [item['epoch'] for item in log]

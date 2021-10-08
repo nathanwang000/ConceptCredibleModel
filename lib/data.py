@@ -8,7 +8,7 @@ from torchvision import transforms
 import os
 import pathlib
 import tqdm
-from torchvision.transforms import GaussianBlur, CenterCrop, ColorJitter, Grayscale, RandomCrop, RandomHorizontalFlip
+from torchvision.transforms import GaussianBlur, CenterCrop, ColorJitter, Grayscale, RandomCrop, RandomHorizontalFlip, RandomRotation
 import pandas as pd
 # torch.multiprocessing.set_start_method('spawn') # only useful when cuda need inside transform
 
@@ -186,25 +186,92 @@ class small_CUB(Dataset):
         x, y = preprocess(input_image), self.labels[idx]
         return self.transform(x, y), y
 
-class MIMIC(Dataset):
+
+def MIMIC_train_transform(dataset, *args, **kwargs):
     '''
-    mimic cxr dataset
+    transform according sarah's shortcut paper
+    self.composed(self.standardizer._transform_image(io.imread(curr_data["local_path"])/ 255)).transpose(2,0,1)
+    '''
+    size = 299 # todo 512 for densenet
+    transform = transforms.Compose([
+        transforms.Resize(size), # this only trims the smaller side
+        transforms.RandomRotation(15),
+        transforms.RandomCrop(size), 
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                             std=[0.229, 0.224, 0.225]),
+    ])
+        
+    return TransformWrapper(dataset, x_transform(transform))
+
+def MIMIC_test_transform(dataset, *args, **kwargs):
+    '''
+    transform according sarah's shortcut paper
+    self.composed(self.standardizer._transform_image(io.imread(curr_data["local_path"])/ 255)).transpose(2,0,1)
+    '''
+    size = 299 # todo 512 for densenet
+    transform = transforms.Compose([
+        transforms.Resize(size), # this only trims the smaller side
+        transforms.CenterCrop(size), 
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                             std=[0.229, 0.224, 0.225]),
+    ])
+        
+    return TransformWrapper(dataset, x_transform(transform))
+
+class MIMIC_ahrf(Dataset):
+    '''
+    mimic cxr ahrf subset
     task is a str that specifies a column in csv_file: e.g., Pneumonia
     '''
-    def __init__(self, csv_file, task):
+    def __init__(self, task="Pneumonia"):
+        pwd = pathlib.Path(__file__).parent.absolute()        
+        csv_file = f"{pwd}/../datasets/mimic_ahrf.csv"
         df = pd.read_csv(csv_file)
+        self.task = task
+        self.basedir = f"{pwd}/../datasets/"        
         # mask unknown values
         self.df = df[df[self.task] >= 0]
-        self.task = task
-
+        
     def __len__(self):
         return len(self.df)
 
     def __getitem__(self, idx):
-        filename = self.df.iloc[idx].local_path
+        filename = os.path.join(self.basedir, self.df.iloc[idx].local_path)
         x = Image.open(filename)
-        y = self.iloc[idx][self.task]
-        return {"x": x, "y": y, "filename": filename}
+        y = self.df.iloc[idx][self.task]
+        pid = self.df.iloc[idx]["pt_id"]
+        return {"x": x, "y": int(y), "filename": filename, "patient_id": pid,
+                "task": self.task}
+
+class MIMIC(Dataset):
+    '''
+    mimic full dataset
+    task is a str that specifies a column in csv_file: e.g., Pneumonia
+    '''
+    def __init__(self, task):
+        pwd = pathlib.Path(__file__).parent.absolute()        
+        csv_file = f"{pwd}/../datasets/mimic_chexpert.csv"
+        df = pd.read_csv(csv_file)
+        self.task = task
+        self.basedir = f"{pwd}/../datasets/mimic-cxr-preprocessed/"
+        # mask unknown values
+        df = df[df[self.task] >= 0]
+        # get rid of chexpert images
+        self.df = df[~df['local_path'].str.startswith('~/Chest/chest-x-ray')]
+        
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, idx):
+        filename = os.path.join(self.basedir, # split part is due to sarah's hard coding
+                                self.df.iloc[idx].local_path.split("//")[1])
+        x = Image.open(filename)
+        y = self.df.iloc[idx][self.task]
+        pid = self.df.iloc[idx]["pt_id"]
+        return {"x": x, "y": int(y), "filename": filename, "patient_id": pid,
+                "task": self.task}
     
 class CUB(Dataset):
     '''

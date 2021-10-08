@@ -6,8 +6,9 @@ cut mimic_ahrf.csv -f 7 -d "," | head
 #+END_SRC
 
 number of (train, valid, test): 1190, 406, 392
+total of 1988 images
 
-* target task: chf_scale # field 9 in the file
+* target task: chf_scale, field 9 in the file
 number of (pos, neg): 225, 1763
 #+BEGIN_SRC bash
 cut mimic_ahrf.csv -f 9 -d ","| awk 'BEGIN{i=0} {if($1==0) i+=1} END{print i}'
@@ -35,3 +36,28 @@ checkpoint/mimic.pth.tar
 potential problem: mimic is trained on all tasks, C thus wouldn't be incomplete
 
 * source task3: mimic initialization only on pneumonia
+
+field 10 of mimic_chexpert.csv
+
+This is the fulll dataset
+
+total of 617,141 images # 300 times larger than the subset
+
+with 128,909 non -1 cases # so 60 times larger than the ahrf subset
+
+actually removing chestpert image, mimic dataset has 106177 cases
+
+#+BEGIN_SRC bash
+cut mimic_chexpert.csv  -f 10 -d ","  | awk 'BEGIN{i=0} {if($1>=0) i+=1} END{print i}'
+#+END_SRC
+
+** bad images
+
+the following cases are bad images
+
+#+BEGIN_VERSE
+ipdb>  p self.df.iloc[idx].local_path
+'~/Chest/chest-x-ray/chexpert/preprocessed_images_no_border/train/patient00012/study3/view1_frontal.jpg'
+#+END_VERSE
+
+
