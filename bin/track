@@ -151,9 +151,12 @@ if __name__ == "__main__":
             print(message)
         else:
             tmp = tempfile.NamedTemporaryFile()
-            with open(tmp.name, 'w') as f:
-                f.write(message)
-            os.system(f"cat {tmp.name} | less -R")
+            try:
+                with open(tmp.name, 'w') as f:
+                    f.write(message)
+                os.system(f"cat {tmp.name} | less -R")
+            finally:
+                tmp.close()
 
     else: # run the command        
         
