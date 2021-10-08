@@ -60,7 +60,7 @@ def get_args():
                         help="shortcut transform to use; clean: no shortcut; noise: shortcut dependent on y; else: shortcut dependent on yhat computed from the model path")
     parser.add_argument("-t", "--threshold", default=1.0, type=float,
                         help="shortcut threshold to use (1 always Y dependent, 0 ind)")
-    parser.add_argument("--n_shortcuts", default=10, type=int,
+    parser.add_argument("--n_shortcuts", default=2, type=int,
                         help="number of shortcuts")
     parser.add_argument("--init_model_path", type=str, default="",
                         help="model intialization, if None then train from scratch")

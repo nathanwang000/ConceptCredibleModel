@@ -48,6 +48,8 @@ def get_args():
                         help="where to save all the outputs")
     parser.add_argument("--eval", action="store_true",
                         help="whether or not to eval the learned model")
+    parser.add_argument("--task", default="Pneumonia",
+                        help="which task to train concept model")
     parser.add_argument("--lr", default=0.01, type=float,
                         help="learning rate")
     parser.add_argument("--retrain", action="store_true",
@@ -135,7 +137,7 @@ if __name__ == '__main__':
     model_name = f"{RootPath}/{flags.outputs_dir}/standard"
     print(model_name)
 
-    task = "Pneumonia"
+    task = flags.task
     mimic = MIMIC(task) # mimic doesn't have validation data, chexpert has
     indices = list(range(len(mimic)))
     labels = list(mimic.df[task])

@@ -79,8 +79,12 @@ def test_auc(net, loader, device='cpu', **kwargs):
         
         x, y = d[0], d[1] # assume the first 2 are x, y to accomendate xyc
         x, y = x.to(device), y.to(device)
-        x, s = CUB_shortcut_transform(x, y, **kwargs)        
-        o = F.softmax(net(x), 1)[:, 1] # take the positive probability
+        x, s = CUB_shortcut_transform(x, y, **kwargs)
+        o = net(x)
+        if o.shape[1] == 1:
+            o = torch.sigmoid(o)[:, 0]
+        else:
+            o = F.softmax(net(x), 1)[:, 1] # take the positive probability
         outputs.append(o.detach().cpu().numpy())
         truths.append(y.detach().cpu().numpy())
     net.train()
