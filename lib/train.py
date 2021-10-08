@@ -9,8 +9,12 @@ from lib.data import CUB_shortcut_transform
 
 def train_step_shortcut(net, loader, opt, criterion, device='cpu', **kwargs):
     '''train 1 step of standard model with shortcut in the critierion'''
-    losses = []    
+    losses = []
+    n_batches = 0
     for x, y in tqdm.tqdm(loader, desc="train step for 1 epoch"):
+        n_batches += 1
+        if kwargs.get("max_batches", None) and n_batches > kwargs["max_batches"]:        
+            break
         x, y = x.to(device), y.to(device)
         x, s = CUB_shortcut_transform(x, y, **kwargs)
         opt.zero_grad()
@@ -23,8 +27,12 @@ def train_step_shortcut(net, loader, opt, criterion, device='cpu', **kwargs):
 
 def train_step_standard(net, loader, opt, criterion, device='cpu', **kwargs):
     '''train 1 step of standard model'''
-    losses = []    
+    losses = []
+    n_batches = 0
     for x, y in tqdm.tqdm(loader, desc="train step for 1 epoch"):
+        n_batches += 1
+        if kwargs.get("max_batches", None) and n_batches > kwargs["max_batches"]:
+            break
         x, y = x.to(device), y.to(device)
         x, s = CUB_shortcut_transform(x, y, **kwargs)
         opt.zero_grad()
@@ -43,8 +51,12 @@ def train_step_xyc(net, loader, opt, criterion, independent=False, device='cpu',
     '''
     assert type(net) in [CBM, CCM], f"must use CBM or CCM model; currently {type(net)}"
     losses = []
-    
+
+    n_batches = 0
     for x, y, c in tqdm.tqdm(loader, desc="train step for 1 epoch xyc"):
+        n_batches += 1
+        if kwargs.get("max_batches", None) and n_batches > kwargs["max_batches"]:
+            break
         x, y, c = x.to(device), y.to(device), c.to(device).float()
         x, s = CUB_shortcut_transform(x, y, **kwargs)        
         opt.zero_grad()

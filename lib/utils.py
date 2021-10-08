@@ -7,6 +7,7 @@ import matplotlib
 import numpy as np
 import torch
 from collections.abc import Iterable
+from joblib import Parallel, delayed
 
 def dfs_freeze(model):
     ''' 
@@ -17,7 +18,25 @@ def dfs_freeze(model):
             param.requires_grad = False # doesn't matter
             param.grad = None
         dfs_freeze(child)
-                                            
+
+def pmap(f, l, n_workers):
+    '''
+    parallel version of map
+    f: function
+    l: list
+    n_workers: number of parallel jobs
+    '''
+    return Parallel(n_jobs=n_workers)(delayed(f)(x) for x in l)
+
+def pfilter(f, l, n_workers): # parallel filter
+    '''
+    parallel version of filter
+    f: function
+    l: list
+    n_workers: number of parallel jobs
+    '''
+    return [c for c, keep in zip(l, pmap(f, l, n_workers)) if keep]
+
 ##### CUB specific utilities
 def get_shortcut_level(y, threshold, n_shortcuts):
     '''

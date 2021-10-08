@@ -132,9 +132,9 @@ if __name__ == '__main__':
     print(model_name)
 
     mimic = MIMIC_ahrf('chf_scale')
-    train_indices = [i for i in range(len(mimic)) if mimic.df.iloc[i]['split'] == 'train']
-    val_indices = [i for i in range(len(mimic)) if mimic.df.iloc[i]['split'] == 'valid'] 
-    test_indices = [i for i in range(len(mimic)) if mimic.df.iloc[i]['split'] == 'test']
+    train_indices = np.where(mimic.df['split'] == "train")[0]
+    val_indices = np.where(mimic.df['split'] == "valid")[0]
+    test_indices = np.where(mimic.df['split'] == "test")[0]
 
     # define dataloader: mimic_train_eval is used to evaluate training data
     mimic_train = MIMIC_train_transform(Subset(mimic, train_indices), mode=flags.transform)

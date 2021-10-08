@@ -48,6 +48,8 @@ def get_args():
                         help="where to save all the outputs")
     parser.add_argument("--eval", action="store_true",
                         help="whether or not to eval the learned model")
+    parser.add_argument("--lr", default=0.01, type=float,
+                        help="learning rate")
     parser.add_argument("--retrain", action="store_true",
                         help="retrain using all train val data")
     parser.add_argument("--seed", type=int, default=42,
@@ -98,11 +100,12 @@ def standard_model(flags, loader_xy, loader_xy_eval, loader_xy_te, loader_xy_val
     criterion = lambda o, y: F.cross_entropy(o, y)
     
     # train
-    opt = optim.SGD(net.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0004)
+    opt = optim.SGD(net.parameters(), lr=flags.lr, momentum=0.9, weight_decay=0.0004)
     scheduler = lr_scheduler.StepLR(opt, step_size=lr_step)
 
     run_train = lambda **kwargs: train(
         net, loader_xy, opt, criterion=criterion,
+        max_batches=300, # so that see progress faster
         # shortcut specific
         shortcut_mode = flags.shortcut,
         shortcut_threshold = flags.threshold,
@@ -132,10 +135,20 @@ if __name__ == '__main__':
     model_name = f"{RootPath}/{flags.outputs_dir}/standard"
     print(model_name)
 
-    mimic = MIMIC("Pneumonia")
-    train_indices = [i for i in range(len(mimic)) if mimic.df.iloc[i]['split'] == 'train']
-    val_indices = [i for i in range(len(mimic)) if mimic.df.iloc[i]['split'] == 'valid'] 
-    test_indices = [i for i in range(len(mimic)) if mimic.df.iloc[i]['split'] == 'test']
+    task = "Pneumonia"
+    mimic = MIMIC(task) # mimic doesn't have validation data, chexpert has
+    indices = list(range(len(mimic)))
+    labels = list(mimic.df[task])
+    print(len(indices), len(labels))
+    test_ratio = 0.2
+    train_val_indices, test_indices, train_val_labels, _ = train_test_split(
+        indices, labels, test_size=test_ratio, stratify=labels, random_state=flags.seed)
+    val_ratio = 0.2
+    print(len(train_val_indices), len(train_val_labels))
+    train_indices, val_indices = train_test_split(train_val_indices, test_size=val_ratio,
+                                                  stratify=train_val_labels,
+                                                  random_state=flags.seed)
+    
 
     # define dataloader: mimic_train_eval is used to evaluate training data
     mimic_train = MIMIC_train_transform(Subset(mimic, train_indices), mode=flags.transform)
@@ -150,7 +163,8 @@ if __name__ == '__main__':
         subcolumn = lambda d: SubColumn(d, ['x', 'y'])
 
     load = lambda d, shuffle: DataLoader(subcolumn(d), batch_size=32,
-                                shuffle=shuffle, num_workers=8)
+                                         shuffle=shuffle, num_workers=8,
+                                         drop_last=True)
     loader_xy = load(mimic_train, True)
     loader_xy_val = load(mimic_val, False)
     loader_xy_te = load(mimic_test, False)
@@ -169,7 +183,8 @@ if __name__ == '__main__':
         n_epochs=flags.n_epochs, report_every=1,
         lr_step=flags.lr_step,
         savepath=model_name, use_aux=flags.use_aux, **kwargs)
-    run_test = partial(test_auc, device='cuda',
+    run_test = partial(test_auc, device='cuda', # so don't take too long eval
+                       max_batches=None if flags.eval else 300, 
                        # shortcut specific
                        shortcut_mode = flags.shortcut,
                        shortcut_threshold = flags.threshold,

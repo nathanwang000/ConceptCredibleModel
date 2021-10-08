@@ -71,7 +71,12 @@ def test(net, loader, criterion, device='cpu', **kwargs):
 def test_auc(net, loader, device='cpu', **kwargs):
     net.eval()
     outputs, truths = [], []
+    n_batches = 0
     for d in tqdm.tqdm(loader, desc="test eval"):
+        n_batches += 1
+        if kwargs.get("max_batches", None) and n_batches > kwargs["max_batches"]:
+            break
+        
         x, y = d[0], d[1] # assume the first 2 are x, y to accomendate xyc
         x, y = x.to(device), y.to(device)
         x, s = CUB_shortcut_transform(x, y, **kwargs)        
