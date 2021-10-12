@@ -1,5 +1,5 @@
 '''
-this files trains a CBM source on target task
+this files trains CCM EYE
 '''
 import sys, os
 import tqdm
@@ -31,33 +31,33 @@ FilePath = os.path.dirname(os.path.abspath(__file__))
 RootPath = os.path.dirname(FilePath)
 if RootPath not in sys.path: # parent directory
     sys.path = [RootPath] + sys.path
-from lib.models import MLP, CBM
+from lib.models import MLP, LambdaNet, CCM, ConcatNet
 from lib.data import MIMIC, SubColumn, MIMIC_train_transform, MIMIC_test_transform
-from lib.data import SubAttr
-from lib.train import train, train_step_xyc
-from lib.eval import get_output, test_auc, plot_log, shap_net_x, shap_ccm_c, bootstrap
-from lib.utils import birdfile2class, birdfile2idx, is_test_bird_idx, get_bird_bbox, get_bird_class, get_bird_part, get_part_location, get_multi_part_location, get_bird_name
-from lib.utils import get_attribute_name, code2certainty, get_class_attributes, get_image_attributes, describe_bird
-from lib.utils import get_attr_names
+from lib.train import train
+from lib.eval import get_output, test_auc
+from lib.regularization import EYE, wL2
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-o", "--outputs_dir", default=f"outputs",
-                        help="where to save all the outputs")
-    parser.add_argument("--lr", default=0.01, type=float,
-                        help="learning rate")
+    parser.add_argument('--reg', default='eye',
+                        choices=['eye', 'wl2'],
+                        help='regularization type [eye, wl2], default eye')
     parser.add_argument("--task", default="Pneumonia",
                         help="which task to train concept model")
+    parser.add_argument("-o", "--outputs_dir", default=f"outputs",
+                        help="where to save all the outputs")
     parser.add_argument("--eval", action="store_true",
                         help="whether or not to eval the learned model")
-    parser.add_argument("--add_s", action="store_true",
-                        help="add S to C in concept prediction (Q5)")
     parser.add_argument("--ind", action="store_true",
-                        help="whether or not to train independent CBM")
+                        help="whether or not to train independent CCM")
+    parser.add_argument("--alpha", default=0, type=float,
+                        help="regularization strength for EYE")
     parser.add_argument("--retrain", action="store_true",
                         help="retrain using all train val data")
     parser.add_argument("--seed", type=int, default=42,
                         help="seed for reproducibility")
+    parser.add_argument("--u_grad", action="store_true",
+                        help="option for ccm eye to not fix gradient for f_u")
     parser.add_argument("--transform", default="cbm",
                         help="transform mode to use")
     parser.add_argument("--d_noise", default=0, type=int,
@@ -69,8 +69,11 @@ def get_args():
     parser.add_argument("--use_aux", action="store_true",
                         help="auxilliary loss for inception")
     parser.add_argument("--c_model_path", type=str,
-                        default="outputs/3b52388a27ea11ecb773ac1f6b24a434/standard",
+                        default="gold_models/flip/concepts",
                         help="concept model path starting from root (ignore .pt)")
+    parser.add_argument("--u_model_path", type=str,
+                        default="gold_models/crop/standard",
+                        help="unknown concept model path starting from root (ignore .pt), if None then train from scratch")
     # shortcut related
     parser.add_argument("-s", "--shortcut", default="clean",
                         help="shortcut transform to use; clean: no shortcut; noise: shortcut dependent on y; else: shortcut dependent on yhat computed from the model path")
@@ -79,54 +82,83 @@ def get_args():
     parser.add_argument("--n_shortcuts", default=2, type=int,
                         help="number of shortcuts")
     
+        
     args = parser.parse_args()
     print(args)
     return args
 
-def cbm(flags, concept_model_path,
+def ccm(flags, concept_model_path,
         loader_xy, loader_xy_eval, loader_xy_te, loader_xy_val=None,
-        n_epochs=10, report_every=1, lr_step=1000, net_s=None,
-        independent=False,
+        independent=False, net_s=None,
+        n_epochs=10, report_every=1, lr_step=1000,
+        u_model_path=None,
+        alpha=0, # regularizaiton strength
         device='cuda', savepath=None, use_aux=False):
     '''
     loader_xy_eval is the evaluation of loader_xy
     if loader_xy_val: use early stopping, otherwise train for the number of epochs
+    
+    independent: whether or not to train ccm independently
     '''
-    # regular model
+    # known concept model
     x2c = torch.load(f'{RootPath}/{concept_model_path}.pt')
     x2c.aux_logits = False
     x2c.fc = nn.Identity()
-    fc = nn.Linear(2048, 2) # binary for mimic
 
-    net = CBM(x2c, fc, c_no_grad=True)
+    # unknown concept model
+    if u_model_path:
+        x2u = torch.load(f'{RootPath}/{u_model_path}.pt')
+        x2u.aux_logits = False
+    else:
+        x2u = torch.hub.load('pytorch/vision:v0.9.0', 'inception_v3', pretrained=True)
+        x2u.aux_logits = False
+    x2u.fc = nn.Identity()
+
+    # combined model: could use 2 gpus to run if memory is an issue
+    net_y = nn.Sequential(ConcatNet(dim=1), nn.Linear(2048 + 2048, 200))
+    
+    # combined model:
+    net = CCM(x2c, x2u, net_y, c_no_grad=True, u_no_grad=not flags.u_grad)
     net.to(device)
 
-    print('task auc before training: {:.1f}%'.format(
-        run_test(net, loader_xy_te) * 100))
+    # print('task auc before training: {:.1f}%'.format(
+    #     run_test(net, loader_xy_te) * 100))
     
-    criterion = lambda o_y, y: F.cross_entropy(o_y, y)
-    # criterion = lambda o_y, y: nn.BCEWithLogitsLoss(pos_weight=torch.tensor([10]).long().to(device))(o_y, y.unsqueeze(1).long())
-    # def criterion(o_y, y):
-    #     b = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([10]).to(device))
-    #     return b(o_y, y.unsqueeze(1).float())
+    # add regularization to both u and c
+    # lambda o, y, o_c, c, o_u:
+    # F.cross_entropy(o, y) + 0.1 * (grad(o[y], o_u, create_graph=True)**2).sum()
+    # + 0.1 * R_sq(c, o_u) # use c b/c o_c may not properly learned
+    # make sure the 3 losses are at the same scale (is there a research question?)
+    # and let dataset give x, y, c
+    r = torch.cat([torch.ones(2048), torch.zeros(2048)]).to(device)
+
+    if flags.reg == 'eye':
+        criterion = lambda o_y, y: F.cross_entropy(o_y, y) + \
+            alpha * EYE(r, net_y[1].weight.abs().sum(0))
+    elif flags.reg == 'wl2':
+        criterion = lambda o_y, y: F.cross_entropy(o_y, y) + \
+            alpha * wL2(r, net_y[1].weight.abs().sum(0))
+    else:
+        raise Exception(f"not implemented {flags.reg}")
+        
     
     # train
-    opt = optim.SGD(net.parameters(), lr=flags.lr, momentum=0.9)
-    # opt = optim.Adam(net.parameters())
+    opt = optim.SGD(net.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0004)
     scheduler = lr_scheduler.StepLR(opt, step_size=lr_step)
 
-    run_train = lambda **kwargs: train(net, loader_xy, opt, criterion=criterion,
-                                       max_batches=300, # so that see progress faster                
-                                       # shortcut specific
-                                       shortcut_mode = flags.shortcut,
-                                       shortcut_threshold = flags.threshold,
-                                       n_shortcuts = flags.n_shortcuts,
-                                       net_shortcut = net_s,
-                                       # shortcut specific ends
-                                       independent=independent,
-                                       n_epochs=n_epochs, report_every=report_every,
-                                       device=device, savepath=savepath,
-                                       scheduler=scheduler, **kwargs)
+    run_train = lambda **kwargs: train(
+        net, loader_xy, opt, criterion=criterion,
+        max_batches= 300, # faster
+        # shortcut specific
+        shortcut_mode = flags.shortcut,
+        shortcut_threshold = flags.threshold,
+        n_shortcuts = flags.n_shortcuts,
+        net_shortcut = net_s,
+        # shortcut specific done
+        independent=independent,
+        n_epochs=n_epochs, report_every=report_every,
+        device=device, savepath=savepath,
+        scheduler=scheduler, **kwargs)
 
     if loader_xy_val:
         log  = run_train(
@@ -140,17 +172,17 @@ def cbm(flags, concept_model_path,
                          'train auc': (lambda m: run_test(m, loader_xy_eval) * 100,
                                        'max')})
 
-
     print('task auc after training: {:.1f}%'.format(run_test(net, loader_xy_te) * 100))
     return net
 
 if __name__ == '__main__':
     flags = get_args()
-    model_name = f"{RootPath}/{flags.outputs_dir}/cbm"
+    model_name = f"{RootPath}/{flags.outputs_dir}/ccm"
     print(model_name)
 
     task = flags.task
     mimic = MIMIC(task)
+
     indices = list(range(len(mimic)))
     labels = list(mimic.df[task])
 
@@ -181,33 +213,32 @@ if __name__ == '__main__':
     
     print(f"# train: {len(mimic_train)}, # val: {len(mimic_val)}, # test: {len(mimic_test)}")
 
-    # shortcut
     if flags.shortcut not in ['clean', 'noise']:
         net_s = torch.load(flags.shortcut)
     else:
         net_s = None
-
-    run_train = lambda **kwargs: cbm(
+    
+    run_train = lambda **kwargs:ccm(
         flags, flags.c_model_path,
         loader_xy, loader_xy_eval,
         loader_xy_te, net_s=net_s,
+        independent=flags.ind, alpha=flags.alpha,
+        u_model_path = flags.u_model_path,
         n_epochs=flags.n_epochs, report_every=1,
         lr_step=flags.lr_step,
-        savepath=model_name, use_aux=flags.use_aux,
-        independent=flags.ind, **kwargs)
+        savepath=model_name, use_aux=flags.use_aux, **kwargs)
     run_test = partial(test_auc, 
                        device='cuda',
-                       max_batches= 100, # None if flags.eval else 100,
+                       max_batches= 100, #None if flags.eval else 100,
                        # shortcut specific
                        shortcut_mode = flags.shortcut,
                        shortcut_threshold = flags.threshold,
                        n_shortcuts = flags.n_shortcuts,
                        net_shortcut = net_s)
-    
+
     if flags.eval:
-        net = torch.load(f'{model_name}.pt')
         print('task auc after training: {:.1f}%'.format(
-            run_test(net,
+            run_test(torch.load(f'{model_name}.pt'),
                      loader_xy_te) * 100))
     elif flags.retrain:
         mimic_train = MIMIC_train_transform(Subset(mimic, train_val_indices),
@@ -220,3 +251,4 @@ if __name__ == '__main__':
         net = run_train()
     else:
         net = run_train(loader_xy_val=loader_xy_val)
+        

@@ -346,7 +346,6 @@ def shortcut_noise_transform(x, y, n_shortcuts, sigma_max=0.1, threshold=0,
     assert n_shortcuts <= 200, "shortcut classes <= 200"
 
     sigmas = torch.linspace(0, sigma_max, n_shortcuts)
-
     if shortcut_level is None:
         shortcut_level = get_shortcut_level(y, threshold, n_shortcuts)
             
@@ -362,17 +361,23 @@ def shortcut_noise_transform(x, y, n_shortcuts, sigma_max=0.1, threshold=0,
     return x, shortcut_level
 
 def CUB_shortcut_transform(x, y, **kwargs):
-    
     mode = kwargs.get('shortcut_mode', 'clean')
     if mode == 'clean':
         x, s = x, torch.zeros(x.shape[0]).to(x.device)
     elif mode == 'noise':
         x, s = shortcut_noise_transform(x, y,
                                         n_shortcuts=kwargs['n_shortcuts'],
-                                        threshold=kwargs['shortcut_threshold'])
+                                        threshold=kwargs['shortcut_threshold'],
+                                        sigma_max=kwargs.get('smax',0.1))
     else:
-        x, s = shortcut_noise_transform(x, kwargs['net_shortcut'](x).argmax(1),
+        y_hat = kwargs['net_shortcut'](x)
+        if y_hat.shape[1] == 1:
+            y_hat = (torch.sigmoid(y_hat) >= 0.5).ravel().long()
+        else:
+            y_hat = y_hat.argmax(1)
+        x, s = shortcut_noise_transform(x, y_hat,
                                         n_shortcuts=kwargs['n_shortcuts'],
-                                        threshold=kwargs['shortcut_threshold'])
+                                        threshold=kwargs['shortcut_threshold'],
+                                        sigma_max=kwargs.get('smax', 0.1))
     return x, s
     

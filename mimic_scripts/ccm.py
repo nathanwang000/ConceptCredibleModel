@@ -85,7 +85,7 @@ def get_args():
     print(args)
     return args
 
-def ccm(flags, attr_names, concept_model_path,
+def ccm(flags, concept_model_path,
         loader_xy, loader_xy_eval, loader_xy_te, loader_xy_val=None,
         independent=False, net_s=None,
         n_epochs=10, report_every=1, lr_step=1000,
@@ -98,39 +98,22 @@ def ccm(flags, attr_names, concept_model_path,
     
     independent: whether or not to train ccm independently
     '''
-    attr_full_names = get_attr_names(f"{RootPath}/outputs/concepts/concepts_108.txt")
-    assert len(attr_full_names) == 108, "108 features required"
-    # use subset of attributes: don't need transition b/c it was jointly trained    
-    transition = MIMIC_Subset_Concept_Model(attr_names, attr_full_names)
-    # add irrelevant concept to simulate wrong expert
-    noise_transition = MIMIC_Noise_Concept_Model(flags.d_noise)
-    
-    d_x2u = 200 # give it a chance to learn standard model
-    d_x2c = len(attr_names) # 108 concepts
-    
     # known concept model
     x2c = torch.load(f'{RootPath}/{concept_model_path}.pt')
     x2c.aux_logits = False
+    x2c.fc = nn.Identity()
 
-    if independent:    
-        x2c = nn.Sequential(x2c, # transition,
-                            noise_transition, nn.Sigmoid())
-    else:
-        x2c = nn.Sequential(x2c, # transition,
-                            noise_transition)
-    
     # unknown concept model
     if u_model_path:
         x2u = torch.load(f'{RootPath}/{u_model_path}.pt')
         x2u.aux_logits = False
     else:
         x2u = torch.hub.load('pytorch/vision:v0.9.0', 'inception_v3', pretrained=True)
-        x2u.fc = nn.Linear(2048, d_x2u)
         x2u.aux_logits = False
-        # x2u.AuxLogits.fc = nn.Linear(768, d_x2u)
+    x2u.fc = nn.Identity
 
     # combined model: could use 2 gpus to run if memory is an issue
-    net_y = nn.Sequential(ConcatNet(dim=1), nn.Linear(d_x2c + d_x2u, 200))
+    net_y = nn.Sequential(ConcatNet(dim=1), nn.Linear(2048 + 2048, 200))
     
     # combined model:
     net = CCM(x2c, x2u, net_y, c_no_grad=True, u_no_grad=not flags.u_grad)
@@ -223,7 +206,7 @@ if __name__ == '__main__':
         net_s = None
     
     run_train = lambda **kwargs:ccm(
-        flags, attr_names, flags.c_model_path,
+        flags, flags.c_model_path,
         loader_xy, loader_xy_eval,
         loader_xy_te, net_s=net_s,
         independent=flags.ind, alpha=flags.alpha,

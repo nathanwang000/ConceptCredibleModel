@@ -32,7 +32,7 @@ RootPath = os.path.dirname(FilePath)
 if RootPath not in sys.path: # parent directory
     sys.path = [RootPath] + sys.path
 from lib.models import MLP
-from lib.data import MIMIC_ahrf, SubColumn, MIMIC_train_transform, MIMIC_test_transform
+from lib.data import MIMIC, SubColumn, MIMIC_train_transform, MIMIC_test_transform
 from lib.data import MIMIC
 from lib.train import train
 from lib.eval import get_output, test_auc
@@ -47,6 +47,8 @@ def get_args():
                         help="where to save all the outputs")
     parser.add_argument("--eval", action="store_true",
                         help="whether or not to eval the learned model")
+    parser.add_argument("--task", default="Pneumonia",
+                        help="which task to train concept model")
     parser.add_argument("--retrain", action="store_true",
                         help="retrain using all train val data")
     parser.add_argument("--seed", type=int, default=42,
@@ -104,6 +106,7 @@ def standard_model(flags, loader_xy, loader_xy_eval, loader_xy_te, loader_xy_val
 
     run_train = lambda **kwargs: train(
         net, loader_xy, opt, criterion=criterion,
+        max_batches=300, # so that see progress faster                        
         # shortcut specific
         shortcut_mode = flags.shortcut,
         shortcut_threshold = flags.threshold,
@@ -134,10 +137,19 @@ if __name__ == '__main__':
     model_name = f"{RootPath}/{flags.outputs_dir}/standard"
     print(model_name)
 
-    mimic = MIMIC_ahrf('chf_scale')
-    train_indices = np.where(mimic.df['split'] == "train")[0]
-    val_indices = np.where(mimic.df['split'] == "valid")[0]
-    test_indices = np.where(mimic.df['split'] == "test")[0]
+    task = flags.task
+    mimic = MIMIC(task)
+    indices = list(range(len(mimic)))
+    labels = list(mimic.df[task])
+
+    test_ratio = 0.2
+    train_val_indices, test_indices, train_val_labels, _ = train_test_split(
+        indices, labels, test_size=test_ratio, stratify=labels, random_state=flags.seed)
+    val_ratio = 0.2
+
+    train_indices, val_indices = train_test_split(train_val_indices, test_size=val_ratio,
+                                                  stratify=train_val_labels,
+                                                  random_state=flags.seed)
 
     # define dataloader: mimic_train_eval is used to evaluate training data
     mimic_train = MIMIC_train_transform(Subset(mimic, train_indices), mode=flags.transform)
@@ -172,6 +184,7 @@ if __name__ == '__main__':
         lr_step=flags.lr_step,
         savepath=model_name, use_aux=flags.use_aux, **kwargs)
     run_test = partial(test_auc, device='cuda',
+                       max_batches= 100,#None if flags.eval else 300, # todo
                        # shortcut specific
                        shortcut_mode = flags.shortcut,
                        shortcut_threshold = flags.threshold,
@@ -180,13 +193,13 @@ if __name__ == '__main__':
                        net_shortcut = net_s)
     
     if flags.eval:
-        print('train auc after training: {:.1f}%'.format(
-            run_test(torch.load(f'{model_name}.pt'),
-                     loader_xy) * 100))
+        # print('train auc after training: {:.1f}%'.format(
+        #     run_test(torch.load(f'{model_name}.pt'),
+        #              loader_xy) * 100))
 
-        print('val auc after training: {:.1f}%'.format(
-            run_test(torch.load(f'{model_name}.pt'),
-                     loader_xy_val) * 100))
+        # print('val auc after training: {:.1f}%'.format(
+        #     run_test(torch.load(f'{model_name}.pt'),
+        #              loader_xy_val) * 100))
         
         print('task auc after training: {:.1f}%'.format(
             run_test(torch.load(f'{model_name}.pt'),

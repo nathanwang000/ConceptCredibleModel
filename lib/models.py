@@ -1,10 +1,32 @@
 import torch
 import torch.nn as nn
 import types
+import numpy as np
 
 ####
 from lib.utils import attribute2idx, dfs_freeze, get_shortcut_level
 
+class CDropout(nn.Module):
+    '''
+    dropout layer with C
+    r: binary risk factor array
+    p: dropout rate
+    '''
+    def __init__(self, r, p):
+        assert 0 <= p <=1, f"p need to be within [0, 1], now is {p}"
+        super().__init__()
+        np.random.seed(42)
+        self.r = r
+        self.p = p
+        mask = torch.from_numpy(np.random.choice(2,len(r),
+                                                 p=[1-p, p])).to(r.device)
+        # mask represent features to throw away
+        self.mask = (mask * (1-r)).bool() # keep risk factors
+
+    def forward(self, x):
+        # import pdb; pdb.set_trace()        
+        return x * (~self.mask) # broadcast to last dimension
+    
 class MLP(nn.Module):
 
     def __init__(self, neuron_sizes, activation=nn.ReLU, bias=True): 
