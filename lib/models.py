@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import types
 import numpy as np
+from torchvision import transforms
 
 ####
 from lib.utils import attribute2idx, dfs_freeze, get_shortcut_level
@@ -186,12 +187,14 @@ class CCM(nn.Module):
     '''
     concept credible model
     '''
-    def __init__(self, net_c, net_u, net_y, c_no_grad=True, u_no_grad=False):
+    def __init__(self, net_c, net_u, net_y, c_no_grad=True,
+                 u_no_grad=False, mask=False):
         '''
         f(x) = net_y(net_c(x), net_u(x))
         net_c and net_not_c output (n, d_*)
         c_no_grad: known concept model doesn't need gradient (save gpu memory)
         u_no_grad: unknown concept model doesn't need gradient
+        mask: unknown concept has different data augmentation
         '''
         super().__init__()
         self.net_c = net_c
@@ -199,6 +202,7 @@ class CCM(nn.Module):
         self.net_y = net_y
         self.c_no_grad = c_no_grad
         self.u_no_grad = u_no_grad
+        self.mask = mask
         if c_no_grad:
             dfs_freeze(self.net_c)
         if u_no_grad:
@@ -218,6 +222,10 @@ class CCM(nn.Module):
 
     def get_ou(self, x):
 
+        if hasattr(self, 'mask') and self.mask and self.training:
+            # only do this in training
+            x = transforms.RandomErasing()(x)
+        
         if self.u_no_grad:
             with torch.no_grad():
                 self.net_u.eval()

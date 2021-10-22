@@ -317,6 +317,7 @@ def show_explanation(dataset, idx, models, explain_method=VanillaBackprop, n_col
         plt.subplot(n_row, n_col, i+2)
         # save as convert2grayscale image in the online visualization code
         grad = attribution.permute(1,2,0).abs().sum(-1)
+        print(f'l2^2(grad): {(grad**2).sum()}')
         # plt.imshow(grad / grad.max(), cmap='twilight')
         plt.imshow((grad - grad.min()) / (grad.max() - grad.min()), cmap='twilight')
         

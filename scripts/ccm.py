@@ -58,6 +58,8 @@ def get_args():
                         help="regularization strength for EYE")
     parser.add_argument("--retrain", action="store_true",
                         help="retrain using all train val data")
+    parser.add_argument("--randomErase", action="store_true",
+                        help="random erase part of the image, but not for C")
     parser.add_argument("--seed", type=int, default=42,
                         help="seed for reproducibility")
     parser.add_argument("--bs", type=int, default=32,
@@ -144,7 +146,8 @@ def ccm(flags, attr_names, concept_model_path,
     net_y = nn.Sequential(ConcatNet(dim=1), nn.Linear(d_x2c + d_x2u, 200))
     
     # combined model:
-    net = CCM(x2c, x2u, net_y, c_no_grad=True, u_no_grad=not flags.u_grad)
+    net = CCM(x2c, x2u, net_y, c_no_grad=True, u_no_grad=not flags.u_grad,
+              mask=flags.randomErase)
     net.to(device)
 
     # print('task acc before training: {:.1f}%'.format(
