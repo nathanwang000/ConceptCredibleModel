@@ -298,7 +298,8 @@ def show_explanation(dataset, idx, models, explain_method=VanillaBackprop, n_col
     show feature attribution of models to input
     '''
     n_row = math.ceil(float(len(models)+1) / n_col)
-    im, y, attr = dataset[idx]['x'].permute(1,2,0), dataset[idx]['y'], dataset[idx]['attr']
+    input_x, y = dataset[idx]['x'], dataset[idx]['y']
+    im = input_x.permute(1,2,0)
     target_class = y
     print('class id:', y)
     plt.figure(figsize=(4 * n_col, n_row * 3))
@@ -309,7 +310,7 @@ def show_explanation(dataset, idx, models, explain_method=VanillaBackprop, n_col
     for i, m in enumerate(models):
         explain = explain_method(m) # IntegratedGradients(m)
         # Generate attribution
-        x = dataset[idx]['x'].unsqueeze(0).to(device)
+        x = input_x.unsqueeze(0).to(device)
         pred = m(x).argmax(1).item()
         attribution = explain.explain(x,
                                       target_class)
