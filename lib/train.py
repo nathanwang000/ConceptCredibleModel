@@ -58,7 +58,9 @@ def train_step_xyc(net, loader, opt, criterion, independent=False, device='cpu',
         if kwargs.get("max_batches", None) and n_batches > kwargs["max_batches"]:
             break
         x, y, c = x.to(device), y.to(device), c.to(device).float()
-        x, s = CUB_shortcut_transform(x, y, **kwargs)        
+        x.requires_grad = True        
+        x, s = CUB_shortcut_transform(x, y, **kwargs)
+
         opt.zero_grad()
 
         if type(net) == CBM:
@@ -79,8 +81,8 @@ def train_step_xyc(net, loader, opt, criterion, independent=False, device='cpu',
                 o_c = net.get_oc(x)
                 o_u = net.get_ou(x)
                 o_y = net.net_y([o_c, o_u])
-                
-            l = criterion(o_y, y, o_c, c, o_u).mean()
+
+            l = criterion(o_y, y, o_c, c, o_u, x).mean()
             
         l.backward()
         opt.step()

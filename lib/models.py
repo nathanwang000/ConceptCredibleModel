@@ -211,6 +211,7 @@ class CCM(nn.Module):
                 self.net_c.eval()
                 o_c = self.net_c(x)
         else:
+            self.net_c.eval()
             o_c = self.net_c(x)
             
         return o_c

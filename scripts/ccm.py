@@ -12,6 +12,7 @@ from PIL import Image
 from torchvision import transforms
 from IPython.display import Image as showImg
 import torch.nn as nn
+from torch.autograd import grad
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.utils.data import Subset
@@ -45,7 +46,7 @@ from lib.regularization import EYE, wL2
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--reg', default='eye',
-                        choices=['eye', 'wl2'],
+                        choices=['eye', 'wl2', 'ig'],
                         help='regularization type [eye, wl2], default eye')
     parser.add_argument("-o", "--outputs_dir", default=f"outputs",
                         help="where to save all the outputs")
@@ -59,6 +60,8 @@ def get_args():
                         help="retrain using all train val data")
     parser.add_argument("--seed", type=int, default=42,
                         help="seed for reproducibility")
+    parser.add_argument("--bs", type=int, default=32,
+                        help="batch size")
     parser.add_argument("--u_grad", action="store_true",
                         help="option for ccm eye to not fix gradient for f_u")
     parser.add_argument("--transform", default="cbm",
@@ -156,11 +159,20 @@ def ccm(flags, attr_names, concept_model_path,
     r = torch.cat([torch.ones(d_x2c), torch.zeros(d_x2u)]).to(device)
 
     if flags.reg == 'eye':
-        criterion = lambda o_y, y, o_c, c, o_u: F.cross_entropy(o_y, y) + \
+        criterion = lambda o_y, y, o_c, c, o_u, x: F.cross_entropy(o_y, y) + \
             alpha * EYE(r, net_y[1].weight.abs().sum(0))
     elif flags.reg == 'wl2':
-        criterion = lambda o_y, y, o_c, c, o_u: F.cross_entropy(o_y, y) + \
+        criterion = lambda o_y, y, o_c, c, o_u, x: F.cross_entropy(o_y, y) + \
             alpha * wL2(r, net_y[1].weight.abs().sum(0))
+    elif flags.reg == 'ig':
+        net.c_no_grad = False # need to calc grad
+        def criterion(o_y, y, o_c, c, o_u, x):
+            # import pdb; pdb.set_trace()
+            return F.cross_entropy(o_y, y) + \
+            alpha * (grad(torch.softmax(o_y, 1).gather(1, y.view(-1,1)).sum(), x, create_graph=True)[0]**2).sum()
+        
+        # criterion = lambda o_y, y, o_c, c, o_u, x: F.cross_entropy(o_y, y) + \
+        #     alpha * (grad(torch.softmax(o_y, 1).gather(1, y.view(-1,1)).sum(), x)**2).sum()
     else:
         raise Exception(f"not implemented {flags.reg}")
         
@@ -226,7 +238,7 @@ if __name__ == '__main__':
 
     # dataset
     subcolumn = lambda d: SubColumn(SubAttr(d, attr_names), ['x', 'y', 'attr'])
-    load = lambda d, shuffle: DataLoader(subcolumn(d), batch_size=32,
+    load = lambda d, shuffle: DataLoader(subcolumn(d), batch_size=flags.bs,
                                 shuffle=shuffle, num_workers=8)
     loader_xyc = load(cub_train, True)
     loader_xyc_val = load(cub_val, False)

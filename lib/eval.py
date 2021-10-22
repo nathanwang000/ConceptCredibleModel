@@ -293,4 +293,35 @@ def show_attribution(dataset, models, attributes, idx, explain_method=VanillaBac
         plt.axis('off')
     plt.show()
 
+def show_explanation(dataset, idx, models, explain_method=VanillaBackprop, n_col=5, device='cuda'):
+    '''
+    show feature attribution of models to input
+    '''
+    n_row = math.ceil(float(len(models)+1) / n_col)
+    im, y, attr = dataset[idx]['x'].permute(1,2,0), dataset[idx]['y'], dataset[idx]['attr']
+    target_class = y
+    print('class id:', y)
+    plt.figure(figsize=(4 * n_col, n_row * 3))
+    plt.subplot(n_row, n_col, 1)
+    plt.imshow((im - im.min()) / (im.max() - im.min()))
+    plt.axis('off')
+
+    for i, m in enumerate(models):
+        explain = explain_method(m) # IntegratedGradients(m)
+        # Generate attribution
+        x = dataset[idx]['x'].unsqueeze(0).to(device)
+        pred = m(x).argmax(1).item()
+        attribution = explain.explain(x,
+                                      target_class)
+
+        plt.subplot(n_row, n_col, i+2)
+        # save as convert2grayscale image in the online visualization code
+        grad = attribution.permute(1,2,0).abs().sum(-1)
+        # plt.imshow(grad / grad.max(), cmap='twilight')
+        plt.imshow((grad - grad.min()) / (grad.max() - grad.min()), cmap='twilight')
+        
+        plt.title(f"{target_class}: pred {pred}" )
+        plt.axis('off')
+    plt.show()
+    
 
