@@ -214,8 +214,8 @@ class CCM(nn.Module):
             with torch.no_grad():
                 self.net_c.eval()
                 o_c = self.net_c(x)
+                o_c.requires_grad = True # get ig methods working
         else:
-            self.net_c.eval()
             o_c = self.net_c(x)
             
         return o_c
@@ -230,8 +230,10 @@ class CCM(nn.Module):
             with torch.no_grad():
                 self.net_u.eval()
                 o_u = self.net_u(x)
+                o_u.requires_grad = True # get ig methods working
         else:
             o_u = self.net_u(x)
+
         return o_u
 
     def forward(self, x):

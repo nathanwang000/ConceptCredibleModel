@@ -8,9 +8,9 @@ def EYE(r, x):
     x: attribution (d,)
     
     '''
-    assert r.shape == x.shape
-    l1 = (x * (1-r)).abs().sum()
-    l2sq = (r * x).dot(r * x)
+    assert r.shape[-1] == x.shape[-1] # can broadcast
+    l1 = (x * (1-r)).abs().sum(-1)
+    l2sq = ((r * x)**2).sum(-1)
     return  l1 + torch.sqrt(l1**2 + l2sq)
 
 def wL2(r, x):
@@ -19,8 +19,8 @@ def wL2(r, x):
     r: risk factors indicator (d,)
     x: attribution (d,)
     '''
-    assert r.shape == x.shape    
-    return (x * (1-r)).dot(x * (1-r))
+    assert r.shape[-1] == x.shape[-1] # can broadcast    
+    return ((x * (1-r))**2).sum(-1)
 
 def wL1(r, x):
     '''
@@ -28,8 +28,8 @@ def wL1(r, x):
     r: risk factors indicator (d,)
     x: attribution (d,)
     '''
-    assert r.shape == x.shape    
-    return (x * (1-r)).abs().sum()
+    assert r.shape[-1] == x.shape[-1] # can broadcast        
+    return (x * (1-r)).abs().sum(-1)
 
 def p_inverse(x, eps=1e-10):
     '''

@@ -42,12 +42,13 @@ from lib.utils import birdfile2class, birdfile2idx, is_test_bird_idx, get_bird_b
 from lib.utils import get_attribute_name, code2certainty, get_class_attributes, get_image_attributes, describe_bird
 from lib.utils import get_attr_names
 from lib.regularization import EYE, wL2
+from lib.utils import dfs_freeze
 
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--reg', default='eye',
-                        choices=['eye', 'wl2', 'ig'],
-                        help='regularization type [eye, wl2], default eye')
+                        choices=['eye', 'wl2', 'ig', 'eye_ig'],
+                        help='regularization type, default eye')
     parser.add_argument("-o", "--outputs_dir", default=f"outputs",
                         help="where to save all the outputs")
     parser.add_argument("--eval", action="store_true",
@@ -168,20 +169,33 @@ def ccm(flags, attr_names, concept_model_path,
         criterion = lambda o_y, y, o_c, c, o_u, x: F.cross_entropy(o_y, y) + \
             alpha * wL2(r, net_y[1].weight.abs().sum(0))
     elif flags.reg == 'ig':
-        net.c_no_grad = False # need to calc grad
+
+        if not flags.u_grad:
+            dfs_freeze(net.net_u)
+            net.u_no_grad = False # so that its gradient can pass through
+            
         def criterion(o_y, y, o_c, c, o_u, x):
-            # import pdb; pdb.set_trace()
             return F.cross_entropy(o_y, y) + \
-            alpha * (grad(torch.softmax(o_y, 1).gather(1, y.view(-1,1)).sum(), x, create_graph=True)[0]**2).sum()
+            alpha * (grad(o_y.gather(1, y.view(-1,1)).sum(), x, create_graph=True)[0]**2).sum()
         
-        # criterion = lambda o_y, y, o_c, c, o_u, x: F.cross_entropy(o_y, y) + \
-        #     alpha * (grad(torch.softmax(o_y, 1).gather(1, y.view(-1,1)).sum(), x)**2).sum()
+    elif flags.reg == 'eye_ig':
+        def criterion(o_y, y, o_c, c, o_u, x):
+            '''
+            don't pass through softmax because in order to have small input gradient with probability, it will
+            just increase theta, instead we measure usage by sum(|dyhat_i / dx|)
+            
+            the following does |dyhat_y / dx|
+            '''
+            # ig_oc, ig_ou = grad(torch.softmax(o_y,1).gather(1, y.view(-1,1)).sum(), [o_c, o_u], create_graph=True)            
+            ig_oc, ig_ou = grad(o_y.gather(1, y.view(-1,1)).sum(), [o_c, o_u], create_graph=True)
+            return F.cross_entropy(o_y, y) + \
+                alpha * EYE(r, torch.cat([ig_oc, ig_ou], 1).abs()).mean() # per instance version
     else:
         raise Exception(f"not implemented {flags.reg}")
         
     
     # train
-    opt = optim.SGD(net.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0004)
+    opt = optim.SGD(filter(lambda p: p.requires_grad, net.parameters()), lr=0.01, momentum=0.9, weight_decay=0.0004)
     scheduler = lr_scheduler.StepLR(opt, step_size=lr_step)
 
     run_train = lambda **kwargs: train(
