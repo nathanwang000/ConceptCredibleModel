@@ -200,6 +200,10 @@ if __name__ == '__main__':
     train_indices, val_indices = train_test_split(train_val_indices, test_size=val_ratio,
                                                   stratify=train_val_labels,
                                                   random_state=flags.seed)
+    
+    # train indices already are used for training CBM, so we split validation in half to train the residual model
+    train_indices, val_indices = train_test_split(val_indices, test_size=0.5,
+                                                  random_state=flags.seed)
 
     # define dataloader: cub_train_eval is used to evaluate training data
     cub_train = CUB_train_transform(Subset(cub, train_indices), mode=flags.transform)
