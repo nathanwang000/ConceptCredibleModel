@@ -114,7 +114,7 @@ def ccm(flags, concept_model_path,
     net = CCM_res(cbm, x2u)
     net.to(device)
 
-    # print('task acc before training: {:.1f}%'.format(
+    # print('task auc before training: {:.1f}%'.format(
     #     run_test(net, loader_xy_te) * 100))
     
     criterion = lambda o_y, y: F.cross_entropy(o_y, y)
@@ -138,17 +138,17 @@ def ccm(flags, concept_model_path,
 
     if loader_xy_val:
         log  = run_train(
-            report_dict={'val acc': (lambda m: run_test(m, loader_xy_val) * 100, 'max'),
-                         'train acc': (lambda m: run_test(m, loader_xy_eval) * 100,
+            report_dict={'val auc': (lambda m: run_test(m, loader_xy_val) * 100, 'max'),
+                         'train auc': (lambda m: run_test(m, loader_xy_eval) * 100,
                                        'max')},
-                    early_stop_metric='val acc')
+                    early_stop_metric='val auc')
     else:
         log = run_train(
-            report_dict={'test acc': (lambda m: run_test(m, loader_xy_te) * 100, 'max'),
-                         'train acc': (lambda m: run_test(m, loader_xy_eval) * 100,
+            report_dict={'test auc': (lambda m: run_test(m, loader_xy_te) * 100, 'max'),
+                         'train auc': (lambda m: run_test(m, loader_xy_eval) * 100,
                                        'max')})
 
-    print('task acc after training: {:.1f}%'.format(run_test(net, loader_xy_te) * 100))
+    print('task auc after training: {:.1f}%'.format(run_test(net, loader_xy_te) * 100))
     return net
 
 if __name__ == '__main__':
@@ -216,7 +216,7 @@ if __name__ == '__main__':
                        net_shortcut = net_s)
 
     if flags.eval:
-        print('task acc after training: {:.1f}%'.format(
+        print('task auc after training: {:.1f}%'.format(
             run_test(torch.load(f'{model_name}.pt'),
                      loader_xy_te) * 100))
     elif flags.retrain:
