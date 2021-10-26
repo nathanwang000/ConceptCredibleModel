@@ -39,3 +39,9 @@ pipenv run pip install torch==1.7.1+cu101 torchvision==0.8.2+cu101 torchaudio==0
 
 also note that nvidia-smi shows the driver version, not the run time version
 https://stackoverflow.com/questions/40517083/multiple-cuda-versions-on-machine-nvcc-v-confusion
+* mimic data
+
+The problem with arf subset is that 
+1. The confidence interval is too large (sample too small)
+2. C is too strong (STD(X) not better than CBM on clean dataset so that nothing to learn)
+3. C is too weak
