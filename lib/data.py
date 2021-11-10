@@ -245,6 +245,12 @@ class MIMIC_ahrf(Dataset):
         return {"x": x, "y": int(y), "filename": filename, "patient_id": pid,
                 "task": self.task}
 
+def get_subject_id(s):
+    '''
+    ~/Fused/mimic-cxr/preprocessed_images//p10/p10000032/s50414267/02aa804e-bde0afdd-112c0b34-7bc16630-4e384014.jpg => 10000032
+    '''
+    return int(s.split("//p")[1].split("/")[1][1:])
+
 class MIMIC(Dataset):
     '''
     mimic full dataset
@@ -253,13 +259,20 @@ class MIMIC(Dataset):
     def __init__(self, task):
         pwd = pathlib.Path(__file__).parent.absolute()        
         csv_file = f"{pwd}/../datasets/mimic_chexpert.csv"
+        patient_csv = f"{pwd}/../datasets/mimic4_flat/physionet.org/files/mimiciv/1.0/core/patients.csv"
         df = pd.read_csv(csv_file)
         self.task = task
         self.basedir = f"{pwd}/../datasets/mimic-cxr-preprocessed/"
         # mask unknown values
         df = df[df[self.task] >= 0]
-        # get rid of chexpert images
-        self.df = df[~df['local_path'].str.startswith('~/Chest/chest-x-ray')]
+        # get rid of chexpert images: todo: deep copy here
+        df = df[~df['local_path'].str.startswith('~/Chest/chest-x-ray')]
+        # get subject_id: 106177 records
+        df["subject_id"] = df["local_path"].apply(get_subject_id)
+        # join with patient table: 105969 records
+        pdf = pd.read_csv(patient_csv)
+        df = df.merge(pdf, on="subject_id", how='inner')
+        self.df = df
         
     def __len__(self):
         return len(self.df)
@@ -269,8 +282,11 @@ class MIMIC(Dataset):
                                 self.df.iloc[idx].local_path.split("//")[1])
         x = Image.open(filename)
         y = self.df.iloc[idx][self.task]
-        pid = self.df.iloc[idx]["pt_id"]
-        return {"x": x, "y": int(y), "filename": filename, "patient_id": pid,
+        sid = self.df.iloc[idx]["pt_id"]
+        pid = self.df.iloc[idx]["subject_id"]
+        gender = self.df.iloc[idx]["gender"]        
+        return {"x": x, "y": int(y), "filename": filename, "study_id": sid,
+                "patient_id": pid, "gender": gender,
                 "task": self.task}
     
 class CUB(Dataset):

@@ -44,4 +44,12 @@ https://stackoverflow.com/questions/40517083/multiple-cuda-versions-on-machine-n
 The problem with arf subset is that 
 1. The confidence interval is too large (sample too small)
 2. C is too strong (STD(X) not better than CBM on clean dataset so that nothing to learn)
-3. C is too weak
+
+Instead I chose a task that has a decent gap between STD(X) and CBM performance
+
+mimic ehr data https://physionet.org/content/mimiciv/1.0/
+
+documentation https://mimic.mit.edu/docs/iv/modules/core/patients/
+
+total patients: 382278
+number of male: 182571 (~48%)
