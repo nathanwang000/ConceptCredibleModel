@@ -398,7 +398,7 @@ def CUB_shortcut_transform(x, y, **kwargs):
             
     return x, s
 
-def subsample_mimic(m, field, threshold, net_s=None):
+def subsample_mimic(m, field, threshold, net_s=None, seed=42):
     '''
     subsample the data based on "field"
     assume dataset gives {'x': x, 'y': y, field: field, etc}
@@ -406,6 +406,7 @@ def subsample_mimic(m, field, threshold, net_s=None):
     (or y if net_s is None) and field don't match
     '''
     assert field=='gender', "now only support gender"
+    np.random.seed(seed)
     z = np.random.rand(len(m))
     
     if net_s is not None:

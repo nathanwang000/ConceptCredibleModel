@@ -33,7 +33,7 @@ if RootPath not in sys.path: # parent directory
     sys.path = [RootPath] + sys.path
 from lib.models import MLP
 from lib.data import MIMIC, SubColumn, MIMIC_train_transform, MIMIC_test_transform
-from lib.data import MIMIC
+from lib.data import MIMIC, subsample_mimic
 from lib.train import train
 from lib.eval import get_output, test_auc
 from lib.utils import birdfile2class, birdfile2idx, is_test_bird_idx, describe_bird
@@ -66,6 +66,8 @@ def get_args():
                         help="maximum noise added")
     parser.add_argument("--n_shortcuts", default=2, type=int,
                         help="number of shortcuts")
+    parser.add_argument("--subsample", default="", type=str,
+                        help="field to subsample e.g., gender")
     parser.add_argument("--init_model_path", type=str, default="",
                         help="model intialization, if None then train from scratch")
     # other training stuff
@@ -111,6 +113,7 @@ def standard_model(flags, loader_xy, loader_xy_eval, loader_xy_te, loader_xy_val
         shortcut_mode = flags.shortcut,
         shortcut_threshold = flags.threshold,
         n_shortcuts = flags.n_shortcuts,
+        shortcut_subsample = flags.subsample,
         net_shortcut = net_s,
         smax = flags.smax,
         # shortcut specific done
@@ -139,6 +142,20 @@ if __name__ == '__main__':
 
     task = flags.task
     mimic = MIMIC(task)
+    # subsample the data
+    if flags.shortcut not in ['clean', 'noise']:
+        net_s = torch.load(flags.shortcut)
+    else:
+        net_s = None
+
+    if flags.subsample and flags.shortcut != 'clean':
+        # subsample "subsample" field; only work for binary field
+        print(f"subsampling {flags.subsample}")
+        mimic = subsample_mimic(mimic,
+                                field=flags.subsample,
+                                threshold=flags.threshold,
+                                net_s=net_s)
+    
     indices = list(range(len(mimic)))
     labels = list(mimic.df[task])
 
@@ -172,11 +189,6 @@ if __name__ == '__main__':
     
     print(f"# train: {len(mimic_train)}, # val: {len(mimic_val)}, # test: {len(mimic_test)}")
 
-    if flags.shortcut not in ['clean', 'noise']:
-        net_s = torch.load(flags.shortcut)
-    else:
-        net_s = None
-
     run_train = lambda **kwargs: standard_model(
         flags, loader_xy, loader_xy_eval,
         loader_xy_te, net_s=net_s,
@@ -189,6 +201,7 @@ if __name__ == '__main__':
                        shortcut_mode = flags.shortcut,
                        shortcut_threshold = flags.threshold,
                        n_shortcuts = flags.n_shortcuts,
+                       shortcut_subsample = flags.subsample,
                        smax = flags.smax,                       
                        net_shortcut = net_s)
     
