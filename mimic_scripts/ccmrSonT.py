@@ -155,7 +155,7 @@ def ccm(flags, concept_model_path,
 
 if __name__ == '__main__':
     flags = get_args()
-    model_name = f"{RootPath}/{flags.outputs_dir}/ccm"
+    model_name = f"{RootPath}/{flags.outputs_dir}/ccmr"
     print(model_name)
 
     task = flags.task

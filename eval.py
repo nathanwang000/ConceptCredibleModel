@@ -37,7 +37,7 @@ if __name__ == '__main__':
                     '--n_shortcuts', str(flags.n_shortcuts)]
 
     for i, shortcut in enumerate(['clean', 'noise', flags.shortcut]):
-        # if i <= 1: continue
+        if i == 1: continue # skip the independent noise
         print({'clean': 'clean acc',
                'noise': 't=0 acc',
                flags.shortcut: 't=1 acc'}[shortcut])
