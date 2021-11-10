@@ -378,22 +378,23 @@ def shortcut_noise_transform(x, y, n_shortcuts, sigma_max=0.1, threshold=0,
 
 def CUB_shortcut_transform(x, y, **kwargs):
     mode = kwargs.get('shortcut_mode', 'clean')
+    subsample = kwargs.get('shortcut_subsample', "")
     if mode == 'clean':
         x, s = x, torch.zeros(x.shape[0]).to(x.device)
-    elif mode == 'noise':
-        x, s = shortcut_noise_transform(x, y,
-                                        n_shortcuts=kwargs['n_shortcuts'],
-                                        threshold=kwargs['shortcut_threshold'],
-                                        sigma_max=kwargs.get('smax',0.1))
     else:
-        y_hat = kwargs['net_shortcut'](x)
-        if y_hat.shape[1] == 1:
-            y_hat = (torch.sigmoid(y_hat) >= 0.5).ravel().long()
+        if mode = 'noise':
+            y_hat = y # S contain info ouside of C
         else:
-            y_hat = y_hat.argmax(1)
+            y_hat = kwargs['net_shortcut'](x)
+            if y_hat.shape[1] == 1: # binary
+                y_hat = (torch.sigmoid(y_hat) >= 0.5).ravel().long()
+            else:
+                y_hat = y_hat.argmax(1)
+
         x, s = shortcut_noise_transform(x, y_hat,
                                         n_shortcuts=kwargs['n_shortcuts'],
                                         threshold=kwargs['shortcut_threshold'],
-                                        sigma_max=kwargs.get('smax', 0.1))
+                                        sigma_max=kwargs.get('smax',0.1))
+            
     return x, s
     

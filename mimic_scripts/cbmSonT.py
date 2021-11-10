@@ -78,6 +78,8 @@ def get_args():
                         help="shortcut threshold to use (1 always Y dependent, 0 ind)")
     parser.add_argument("--n_shortcuts", default=2, type=int,
                         help="number of shortcuts")
+    parser.add_argument("--subsample", default="", type=str,
+                        help="field to subsample e.g., gender")
     
     args = parser.parse_args()
     print(args)
@@ -169,7 +171,13 @@ if __name__ == '__main__':
     mimic_test = MIMIC_test_transform(Subset(mimic, test_indices), mode=flags.transform)
     mimic_train_eval = MIMIC_test_transform(Subset(mimic, train_indices), mode=flags.transform)
 
-    # dataset
+    # dataset: todo: subsample here
+    # if subsample: # subsample "subsample" field; only work for binary field
+    #     print(f"subsampling {subsample}")
+    #     x, s = shortcut_subsample_transform(x, y_hat,
+    #                                         threshold=kwargs['shortcut_threshold'],
+    #                                         field=subsample)
+    
     subcolumn = lambda d: SubColumn(d, ['x', 'y'])
     load = lambda d, shuffle: DataLoader(subcolumn(d), batch_size=32,
                                          shuffle=shuffle, num_workers=8,
