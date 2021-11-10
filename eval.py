@@ -11,6 +11,8 @@ def get_args():
                         help="which cbm to create the shortcut")
     parser.add_argument("-n", "--n_shortcuts", default=10, type=int,
                         help="number of shortcuts")
+    parser.add_argument("--subsample", default="", type=str,
+                        help="which field to subsample (only for mimic gender)")
     parser.add_argument("-t", "--threshold", default=1.0, type=float,
                         help="threshold for using shortcut (1 is always use S)")
     
@@ -45,6 +47,8 @@ if __name__ == '__main__':
         else:
             command += ['-t', str(flags.threshold)]
 
+        if i >= 1 and flags.subsample: # non clean
+            command += ['--subsample', flags.subsample]
         command = " ".join(command)
         print(command)
         

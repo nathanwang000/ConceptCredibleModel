@@ -33,7 +33,7 @@ if RootPath not in sys.path: # parent directory
     sys.path = [RootPath] + sys.path
 from lib.models import MLP, CBM
 from lib.data import MIMIC, SubColumn, MIMIC_train_transform, MIMIC_test_transform
-from lib.data import SubAttr
+from lib.data import SubAttr, subsample_mimic
 from lib.train import train, train_step_xyc
 from lib.eval import get_output, test_auc, plot_log, shap_net_x, shap_ccm_c, bootstrap
 from lib.utils import birdfile2class, birdfile2idx, is_test_bird_idx, get_bird_bbox, get_bird_class, get_bird_part, get_part_location, get_multi_part_location, get_bird_name
@@ -154,9 +154,23 @@ if __name__ == '__main__':
 
     task = flags.task
     mimic = MIMIC(task)
+    # subsample the data
+    if flags.shortcut not in ['clean', 'noise']:
+        net_s = torch.load(flags.shortcut)
+    else:
+        net_s = None
+
+    if flags.subsample and flags.shortcut != 'clean':
+        # subsample "subsample" field; only work for binary field
+        print(f"subsampling {flags.subsample}")
+        mimic = subsample_mimic(mimic,
+                                field=flags.subsample,
+                                threshold=flags.threshold,
+                                net_s=net_s)
+
     indices = list(range(len(mimic)))
     labels = list(mimic.df[task])
-
+    
     test_ratio = 0.2
     train_val_indices, test_indices, train_val_labels, _ = train_test_split(
         indices, labels, test_size=test_ratio, stratify=labels, random_state=flags.seed)
@@ -172,19 +186,7 @@ if __name__ == '__main__':
     mimic_test = MIMIC_test_transform(Subset(mimic, test_indices), mode=flags.transform)
     mimic_train_eval = MIMIC_test_transform(Subset(mimic, train_indices), mode=flags.transform)
 
-    # dataset: todo: subsample here
-    if flags.shortcut not in ['clean', 'noise']:
-        net_s = torch.load(flags.shortcut)
-    else:
-        net_s = None
-
-    if flags.subsample: # subsample "subsample" field; only work for binary field
-        print(f"subsampling {subsample}")
-        # todo implement shortcut subsample
-        x, s = shortcut_subsample_transform(x, y_hat,
-                                            threshold=kwargs['shortcut_threshold'],
-                                            field=subsample)
-    
+    # dataset
     subcolumn = lambda d: SubColumn(d, ['x', 'y'])
     load = lambda d, shuffle: DataLoader(subcolumn(d), batch_size=32,
                                          shuffle=shuffle, num_workers=8,

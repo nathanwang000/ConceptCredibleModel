@@ -397,4 +397,33 @@ def CUB_shortcut_transform(x, y, **kwargs):
                                         sigma_max=kwargs.get('smax',0.1))
             
     return x, s
+
+def subsample_mimic(m, field, threshold, net_s=None):
+    '''
+    subsample the data based on "field"
+    assume dataset gives {'x': x, 'y': y, field: field, etc}
+    drop the sample with probability threshold when net_s prediction 
+    (or y if net_s is None) and field don't match
+    '''
+    assert field=='gender', "now only support gender"
+    z = np.random.rand(len(m))
     
+    if net_s is not None:
+        raise Exception("not implemented!")
+    else:
+        # only support mimic dataset for now
+        '''
+        remove male negative and female positive
+        '''
+        drop = (m.df['gender'] == 'M') * (m.df[m.task] == 0) +\
+            (m.df['gender'] == 'F') * (m.df[m.task] == 1)
+        drop = drop * (z <= threshold)
+        m.df = m.df[~drop]
+    return m
+                    
+                    
+                
+                
+
+        
+
