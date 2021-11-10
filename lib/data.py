@@ -378,11 +378,11 @@ def shortcut_noise_transform(x, y, n_shortcuts, sigma_max=0.1, threshold=0,
 
 def CUB_shortcut_transform(x, y, **kwargs):
     mode = kwargs.get('shortcut_mode', 'clean')
-    subsample = kwargs.get('shortcut_subsample', "")
-    if mode == 'clean':
+    subsample = kwargs.get('shortcut_subsample', None)
+    if mode == 'clean' or subsample:
         x, s = x, torch.zeros(x.shape[0]).to(x.device)
     else:
-        if mode = 'noise':
+        if mode == 'noise':
             y_hat = y # S contain info ouside of C
         else:
             y_hat = kwargs['net_shortcut'](x)

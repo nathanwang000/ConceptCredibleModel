@@ -123,6 +123,7 @@ def cbm(flags, concept_model_path,
                                        shortcut_mode = flags.shortcut,
                                        shortcut_threshold = flags.threshold,
                                        n_shortcuts = flags.n_shortcuts,
+                                       shortcut_subsample = flags.subsample,
                                        net_shortcut = net_s,
                                        # shortcut specific ends
                                        independent=independent,
@@ -172,11 +173,17 @@ if __name__ == '__main__':
     mimic_train_eval = MIMIC_test_transform(Subset(mimic, train_indices), mode=flags.transform)
 
     # dataset: todo: subsample here
-    # if subsample: # subsample "subsample" field; only work for binary field
-    #     print(f"subsampling {subsample}")
-    #     x, s = shortcut_subsample_transform(x, y_hat,
-    #                                         threshold=kwargs['shortcut_threshold'],
-    #                                         field=subsample)
+    if flags.shortcut not in ['clean', 'noise']:
+        net_s = torch.load(flags.shortcut)
+    else:
+        net_s = None
+
+    if flags.subsample: # subsample "subsample" field; only work for binary field
+        print(f"subsampling {subsample}")
+        # todo implement shortcut subsample
+        x, s = shortcut_subsample_transform(x, y_hat,
+                                            threshold=kwargs['shortcut_threshold'],
+                                            field=subsample)
     
     subcolumn = lambda d: SubColumn(d, ['x', 'y'])
     load = lambda d, shuffle: DataLoader(subcolumn(d), batch_size=32,
@@ -190,11 +197,6 @@ if __name__ == '__main__':
     print(f"# train: {len(mimic_train)}, # val: {len(mimic_val)}, # test: {len(mimic_test)}")
 
     # shortcut
-    if flags.shortcut not in ['clean', 'noise']:
-        net_s = torch.load(flags.shortcut)
-    else:
-        net_s = None
-
     run_train = lambda **kwargs: cbm(
         flags, flags.c_model_path,
         loader_xy, loader_xy_eval,
@@ -210,6 +212,7 @@ if __name__ == '__main__':
                        shortcut_mode = flags.shortcut,
                        shortcut_threshold = flags.threshold,
                        n_shortcuts = flags.n_shortcuts,
+                       shortcut_subsample = flags.subsample,
                        net_shortcut = net_s)
     
     if flags.eval:
