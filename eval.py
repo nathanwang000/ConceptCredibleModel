@@ -15,6 +15,9 @@ def get_args():
                         help="which field to subsample (only for mimic gender)")
     parser.add_argument("-t", "--threshold", default=1.0, type=float,
                         help="threshold for using shortcut (1 is always use S)")
+    parser.add_argument("--task", default=None, type=str,
+                        help="which task to run on")
+    
     
     args = parser.parse_args()
     print(args)
@@ -35,6 +38,8 @@ if __name__ == '__main__':
                     '--eval',
                     '-o', flags.o,
                     '--n_shortcuts', str(flags.n_shortcuts)]
+    if flags.task:
+        base_command += ['--task', flags.task]
 
     for i, shortcut in enumerate(['clean', 'noise', flags.shortcut]):
         if i == 1: continue # skip the independent noise

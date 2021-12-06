@@ -263,15 +263,16 @@ class MIMIC(Dataset):
         df = pd.read_csv(csv_file)
         self.task = task
         self.basedir = f"{pwd}/../datasets/mimic-cxr-preprocessed/"
-        # mask unknown values
-        df = df[df[self.task] >= 0]
-        # get rid of chexpert images: todo: deep copy here
+        # get rid of chexpert images:
         df = df[~df['local_path'].str.startswith('~/Chest/chest-x-ray')]
         # get subject_id: 106177 records
         df["subject_id"] = df["local_path"].apply(get_subject_id)
         # join with patient table: 105969 records
         pdf = pd.read_csv(patient_csv)
+        pdf['is_male'] = (pdf['gender'] == 'M').astype(float)
         df = df.merge(pdf, on="subject_id", how='inner')
+        # mask unknown values
+        df = df[df[self.task] >= 0]
         self.df = df
         
     def __len__(self):
