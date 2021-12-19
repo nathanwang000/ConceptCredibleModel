@@ -203,7 +203,7 @@ if __name__ == '__main__':
         lr_step=flags.lr_step,
         savepath=model_name, use_aux=flags.use_aux, **kwargs)
     run_test = partial(test_auc, device=DEVICE,
-                       max_batches= None, #100,#None if flags.eval else 300, # todo
+                       max_batches= None if flags.eval else 100,
                        # shortcut specific
                        shortcut_mode = flags.shortcut,
                        shortcut_threshold = flags.threshold,
@@ -213,20 +213,6 @@ if __name__ == '__main__':
                        net_shortcut = net_s)
     
     if flags.eval:
-        # print('train auc after training: {:.1f}%'.format(
-        #     run_test(torch.load(f'{model_name}.pt'),
-        #              loader_xy) * 100))
-
-        # print('val auc after training: {:.1f}%'.format(
-        #     run_test(torch.load(f'{model_name}.pt'),
-        #              loader_xy_val) * 100))
-        
-        # print('task auc after training: {:.1f}%'.format(
-        #     run_test(torch.load(f'{model_name}.pt',
-        #                         map_location=torch.device('cpu') if DEVICE == 'cpu' else None
-        #     ),
-        #              loader_xy_te) * 100))
-
         l, s, r = run_test(torch.load(f'{model_name}.pt'), loader_xy_te)
         print(f'task auc after training: ({l*100:.1f}, {s*100:.1f}, {r*100:.1f})')
         

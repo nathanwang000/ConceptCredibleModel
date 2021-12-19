@@ -211,7 +211,7 @@ if __name__ == '__main__':
         independent=flags.ind, **kwargs)
     run_test = partial(test_auc, 
                        device=DEVICE,
-                       max_batches= 100, # None if flags.eval else 100,
+                       max_batches= None if flags.eval else 100,
                        # shortcut specific
                        shortcut_mode = flags.shortcut,
                        shortcut_threshold = flags.threshold,
@@ -220,11 +220,8 @@ if __name__ == '__main__':
                        net_shortcut = net_s)
     
     if flags.eval:
-        net = torch.load(f'{model_name}.pt',
-                         map_location=torch.device('cpu') if DEVICE == 'cpu' else None)
-        print('task auc after training: {:.1f}%'.format(
-            run_test(net,
-                     loader_xy_te) * 100))
+        l, s, r = run_test(torch.load(f'{model_name}.pt'), loader_xy_te)
+        print(f'task auc after training: ({l*100:.1f}, {s*100:.1f}, {r*100:.1f})')
     elif flags.retrain:
         mimic_train = MIMIC_train_transform(Subset(mimic, train_val_indices),
                                         mode=flags.transform)
