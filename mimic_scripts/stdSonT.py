@@ -26,6 +26,8 @@ from torch.optim import lr_scheduler
 import torch.nn.functional as F
 from functools import partial
 
+DEVICE = 'cuda'
+
 ###
 FilePath = os.path.dirname(os.path.abspath(__file__))
 RootPath = os.path.dirname(FilePath)
@@ -51,10 +53,14 @@ def get_args():
                         help="which task to train concept model")
     parser.add_argument("--retrain", action="store_true",
                         help="retrain using all train val data")
+    parser.add_argument("--saveall", action="store_true",
+                        help="save all epochs")
     parser.add_argument("--seed", type=int, default=42,
                         help="seed for reproducibility")
     parser.add_argument("--transform", default="cbm",
                         help="transform mode to use")
+    parser.add_argument("--name", default="standard",
+                        help="model name to save")
     # shortcut related
     parser.add_argument("--predict_shortcut", action="store_true",
                         help="do shortcut prediction (o.w. predict y)")
@@ -84,7 +90,7 @@ def get_args():
 
 def standard_model(flags, loader_xy, loader_xy_eval, loader_xy_te, loader_xy_val=None,
                    n_epochs=10, report_every=1, lr_step=1000, net_s=None,
-                   device='cuda', savepath=None, use_aux=False):
+                   device=DEVICE, savepath=None, use_aux=False):
     '''
     loader_xy_eval is the evaluation of loader_xy
     if loader_xy_val: use early stopping, otherwise train for the number of epochs
@@ -119,6 +125,7 @@ def standard_model(flags, loader_xy, loader_xy_eval, loader_xy_te, loader_xy_val
         # shortcut specific done
         n_epochs=n_epochs, report_every=report_every,
         device=device, savepath=savepath,
+        saveall=flags.saveall,
         scheduler=scheduler, **kwargs)
     if loader_xy_val:
         log = run_train(
@@ -137,7 +144,7 @@ def standard_model(flags, loader_xy, loader_xy_eval, loader_xy_te, loader_xy_val
 
 if __name__ == '__main__':
     flags = get_args()
-    model_name = f"{RootPath}/{flags.outputs_dir}/standard"
+    model_name = f"{RootPath}/{flags.outputs_dir}/{flags.name}"
     print(model_name)
 
     task = flags.task
@@ -195,8 +202,8 @@ if __name__ == '__main__':
         n_epochs=flags.n_epochs, report_every=1,
         lr_step=flags.lr_step,
         savepath=model_name, use_aux=flags.use_aux, **kwargs)
-    run_test = partial(test_auc, device='cuda',
-                       max_batches= 100,#None if flags.eval else 300, # todo
+    run_test = partial(test_auc, device=DEVICE,
+                       max_batches= None, #100,#None if flags.eval else 300, # todo
                        # shortcut specific
                        shortcut_mode = flags.shortcut,
                        shortcut_threshold = flags.threshold,
@@ -214,9 +221,15 @@ if __name__ == '__main__':
         #     run_test(torch.load(f'{model_name}.pt'),
         #              loader_xy_val) * 100))
         
-        print('task auc after training: {:.1f}%'.format(
-            run_test(torch.load(f'{model_name}.pt'),
-                     loader_xy_te) * 100))
+        # print('task auc after training: {:.1f}%'.format(
+        #     run_test(torch.load(f'{model_name}.pt',
+        #                         map_location=torch.device('cpu') if DEVICE == 'cpu' else None
+        #     ),
+        #              loader_xy_te) * 100))
+
+        l, s, r = run_test(torch.load(f'{model_name}.pt'), loader_xy_te)
+        print(f'task auc after training: ({l*100:.1f}, {s*100:.1f}, {r*100:.1f})')
+        
     elif flags.retrain:
         mimic_train = MIMIC_train_transform(Subset(mimic, train_val_indices),
                                         mode=flags.transform)

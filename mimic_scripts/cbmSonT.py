@@ -26,6 +26,8 @@ from torch.optim import lr_scheduler
 import torch.nn.functional as F
 from functools import partial
 
+DEVICE = 'cuda'
+
 ###
 FilePath = os.path.dirname(os.path.abspath(__file__))
 RootPath = os.path.dirname(FilePath)
@@ -89,7 +91,7 @@ def cbm(flags, concept_model_path,
         loader_xy, loader_xy_eval, loader_xy_te, loader_xy_val=None,
         n_epochs=10, report_every=1, lr_step=1000, net_s=None,
         independent=False,
-        device='cuda', savepath=None, use_aux=False):
+        device=DEVICE, savepath=None, use_aux=False):
     '''
     loader_xy_eval is the evaluation of loader_xy
     if loader_xy_val: use early stopping, otherwise train for the number of epochs
@@ -208,7 +210,7 @@ if __name__ == '__main__':
         savepath=model_name, use_aux=flags.use_aux,
         independent=flags.ind, **kwargs)
     run_test = partial(test_auc, 
-                       device='cuda',
+                       device=DEVICE,
                        max_batches= 100, # None if flags.eval else 100,
                        # shortcut specific
                        shortcut_mode = flags.shortcut,
@@ -218,7 +220,8 @@ if __name__ == '__main__':
                        net_shortcut = net_s)
     
     if flags.eval:
-        net = torch.load(f'{model_name}.pt')
+        net = torch.load(f'{model_name}.pt',
+                         map_location=torch.device('cpu') if DEVICE == 'cpu' else None)
         print('task auc after training: {:.1f}%'.format(
             run_test(net,
                      loader_xy_te) * 100))

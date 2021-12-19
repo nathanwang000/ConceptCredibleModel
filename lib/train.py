@@ -93,6 +93,7 @@ def train(net, loader, opt, train_step=train_step_standard,
           criterion=F.cross_entropy, n_epochs=10, report_every=1,
           device="cpu", savepath=None, report_dict={},
           early_stop_metric=None, patience=20, scheduler=None,
+          saveall=False, # save all epochs
           **kwargs):
     '''
     report dict take the form: {"func_name": (f, mode)} where f takes net as input, mode is "max" or "min"
@@ -135,7 +136,10 @@ def train(net, loader, opt, train_step=train_step_standard,
         if savepath:
             if early_stop_metric not in report_dict or es.num_bad_epochs==0:
                     torch.save(net, savepath + '.pt')
+            if saveall:
+                torch.save(net, savepath + f'_{i}.pt')
             torch.save(train_log, savepath + '.log')
+
 
     return train_log    
 
