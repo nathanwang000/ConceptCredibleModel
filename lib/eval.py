@@ -25,7 +25,7 @@ def get_output(net, loader):
         device = 'cpu'
     
     o = []
-    for d in loader:
+    for d in tqdm.tqdm(loader, desc="get output"):
         if type(d) is dict: x = d['x']
         else: x = d[0]
         x = x.to(device)

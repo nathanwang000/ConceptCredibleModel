@@ -117,7 +117,7 @@ def ccm(flags, concept_model_path,
     x2u.fc = nn.Identity()
 
     # combined model: could use 2 gpus to run if memory is an issue
-    net_y = nn.Sequential(ConcatNet(dim=1), nn.Linear(2048 + 2048, 200))
+    net_y = nn.Sequential(ConcatNet(dim=1), nn.Linear(2048 + 2048, 2))
     
     # combined model:
     net = CCM(x2c, x2u, net_y, c_no_grad=True, u_no_grad=not flags.u_grad)

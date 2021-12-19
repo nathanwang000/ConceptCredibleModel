@@ -271,8 +271,20 @@ class MIMIC(Dataset):
         pdf = pd.read_csv(patient_csv)
         pdf['is_male'] = (pdf['gender'] == 'M').astype(float)
         df = df.merge(pdf, on="subject_id", how='inner')
-        # mask unknown values
+        '''
+        mask unknown values
+        https://physionet.org/content/mimic-cxr-jpg/2.0.0/
+        search structured labels section
+        1.0: means sure positive
+        0.0: means sure negative
+        -1.0: unsure
+        Empty: no mention
+        '''
+        ldf_before = len(df)
+        # print(np.unique(df[self.task]))
         df = df[df[self.task] >= 0]
+        ldf_after = len(df)
+        print(f'{ldf_before - ldf_after} unknown {self.task} value in mimic data')
         self.df = df
         
     def __len__(self):
