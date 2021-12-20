@@ -227,8 +227,8 @@ if __name__ == '__main__':
                        net_shortcut = net_s)
 
     if flags.eval:
-        l, s, r = run_test(torch.load(f'{model_name}.pt'), loader_xy_te)
-        print(f'task auc after training: ({l*100:.1f}, {s*100:.1f}, {r*100:.1f})')
+        s = run_test(torch.load(f'{model_name}.pt'), loader_xy_te)
+        print(f'task auc after training: {s*100:.1f}')
     elif flags.retrain:
         mimic_train = MIMIC_train_transform(Subset(mimic, train_val_indices),
                                         mode=flags.transform)

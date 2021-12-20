@@ -90,8 +90,9 @@ def test_auc(net, loader, device='cpu', **kwargs):
     net.train()
     y, yhat = np.hstack(truths), np.hstack(outputs)
     s = metrics.roc_auc_score(y, yhat)
-    l, r = bootstrap(metrics.roc_auc_score, y, yhat)
-    return l, s, r
+    # l, r = bootstrap(metrics.roc_auc_score, y, yhat)
+    # return l, s, r
+    return s
 
 def plot_log(log, key="loss", semi_y=False, label=None):
     '''log is train log [{epoch: xxx, loss: xxx}]'''
