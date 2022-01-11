@@ -23,6 +23,7 @@ pygraphviz = "*"
 pyyaml = "*"
 scikit-image = "*"
 imgaug = "*"
+brokenaxes = "*"
 
 [requires]
 python_version = "3.7"

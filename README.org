@@ -53,3 +53,16 @@ documentation https://mimic.mit.edu/docs/iv/modules/core/patients/
 
 total patients: 382278
 number of male: 182571 (~48%)
+
+** for efficiently compute confidence interval
+
+first save the model
+#+BEGIN_SRC bash
+python mimic_scripts/save_output.py -m outputs/869ce19c4bc511ecb773ac1f6b24a434/ccm
+#+END_SRC
+
+then compute confidence interval. See [[notebooks/mimic_stats.ipynb][example notebook]].
+#+BEGIN_SRC python
+from lib.eval import bootstrap
+bootstrap(metric, y, yhat)
+#+END_SRC
