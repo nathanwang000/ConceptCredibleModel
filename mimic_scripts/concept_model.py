@@ -186,7 +186,7 @@ if __name__ == '__main__':
         lr_step=flags.lr_step,
         savepath=model_name, use_aux=flags.use_aux, **kwargs)
     run_test = partial(test_auc, device='cuda',
-                       max_batches= 100 # None if flags.eval else 100, 
+                       max_batches= 100, # None if flags.eval else 100, 
                        # shortcut specific
                        shortcut_mode = flags.shortcut,
                        shortcut_threshold = flags.threshold,
