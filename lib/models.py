@@ -129,16 +129,18 @@ class CUB_Subset_Concept_Model(nn.Module):
 
 class CUB_Noise_Concept_Model(nn.Module):
     '''
-    replaces first d concepts with noise N(0, 1)
+    replaces first d concepts with noise N(0, std)
     '''
-    def __init__(self, d):
+    def __init__(self, d, std=1):
         super().__init__()
         self.d = d
+        self.std = std
 
     def forward(self, x):
         bs, d = x.shape
         d = min(d, self.d)
-        noise = torch.randn(bs, d).to(x.device)
+        std = self.std if hasattr(self, 'std') else 1
+        noise = torch.randn(bs, d).to(x.device) * std
         return torch.cat((noise, x[:, d:]), 1)
 
 class Concat_CS_Model(nn.Module):

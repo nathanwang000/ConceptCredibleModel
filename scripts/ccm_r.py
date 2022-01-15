@@ -48,6 +48,8 @@ def get_args():
                         help="where to save all the outputs")
     parser.add_argument("--eval", action="store_true",
                         help="whether or not to eval the learned model")
+    parser.add_argument("--split_val", action="store_true",
+                        help="whether or not to split the validation set (used for ccmr to not reuse training)")
     parser.add_argument("--ind", action="store_true",
                         help="whether or not to train independent CCM")
     parser.add_argument("--alpha", default=0, type=float,
@@ -62,6 +64,8 @@ def get_args():
                         help="weight decay for the model")
     parser.add_argument("--d_noise", default=0, type=int,
                         help="wrong expert dimensions (noise dimensions in c)")
+    parser.add_argument("--std_noise", default=1, type=float,
+                        help="wrong expert dimensions std")
     parser.add_argument("--lr_step", type=int, default=1000,
                         help="learning rate decay steps")
     parser.add_argument("--n_epochs", type=int, default=100,
@@ -108,7 +112,7 @@ def ccm(flags, attr_names, concept_model_path,
     # use subset of attributes: don't need transition b/c it was jointly trained    
     transition = CUB_Subset_Concept_Model(attr_names, attr_full_names)
     # add irrelevant concept to simulate wrong expert    
-    noise_transition = CUB_Noise_Concept_Model(flags.d_noise)
+    noise_transition = CUB_Noise_Concept_Model(flags.d_noise, flags.std_noise)
     
     d_x2u = 200 # give it a chance to learn standard model
     d_x2c = len(attr_names) # 108 concepts
@@ -202,8 +206,9 @@ if __name__ == '__main__':
                                                   random_state=flags.seed)
     
     # train indices already are used for training CBM, so we split validation in half to train the residual model
-    train_indices, val_indices = train_test_split(val_indices, test_size=0.5,
-                                                  random_state=flags.seed)
+    if flags.split_val:
+        train_indices, val_indices = train_test_split(val_indices, test_size=0.5,
+                                                      random_state=flags.seed)
 
     # define dataloader: cub_train_eval is used to evaluate training data
     cub_train = CUB_train_transform(Subset(cub, train_indices), mode=flags.transform)
