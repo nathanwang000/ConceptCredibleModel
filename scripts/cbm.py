@@ -59,6 +59,8 @@ def get_args():
                         help="transform mode to use")
     parser.add_argument("--d_noise", default=0, type=int,
                         help="wrong expert dimensions (noise dimensions in c)")
+    parser.add_argument("--std_noise", default=1, type=float,
+                        help="wrong expert dimensions std")
     parser.add_argument("--lr_step", type=int, default=1000,
                         help="learning rate decay steps")
     parser.add_argument("--n_epochs", type=int, default=100,
@@ -107,7 +109,7 @@ def cbm(flags, attr_names, concept_model_path,
     # use subset of attributes: don't need transition b/c it was jointly trained
     transition = CUB_Subset_Concept_Model(attr_names, attr_full_names)
     # add irrelevant concept to simulate wrong expert    
-    noise_transition = CUB_Noise_Concept_Model(flags.d_noise)
+    noise_transition = CUB_Noise_Concept_Model(flags.d_noise, flags.std_noise)
     # add CS model to test if S add additional information Q5
     if flags.add_s:
         # don't support indepent yet; not the paper's point

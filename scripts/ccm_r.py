@@ -62,10 +62,6 @@ def get_args():
                         help="transform mode to use")
     parser.add_argument("--wd", default=0.0004, type=float,
                         help="weight decay for the model")
-    parser.add_argument("--d_noise", default=0, type=int,
-                        help="wrong expert dimensions (noise dimensions in c)")
-    parser.add_argument("--std_noise", default=1, type=float,
-                        help="wrong expert dimensions std")
     parser.add_argument("--lr_step", type=int, default=1000,
                         help="learning rate decay steps")
     parser.add_argument("--n_epochs", type=int, default=100,
@@ -111,23 +107,12 @@ def ccm(flags, attr_names, concept_model_path,
     assert len(attr_full_names) == 108, "108 features required"
     # use subset of attributes: don't need transition b/c it was jointly trained    
     transition = CUB_Subset_Concept_Model(attr_names, attr_full_names)
-    # add irrelevant concept to simulate wrong expert    
-    noise_transition = CUB_Noise_Concept_Model(flags.d_noise, flags.std_noise)
     
     d_x2u = 200 # give it a chance to learn standard model
     d_x2c = len(attr_names) # 108 concepts
     
     # known concept model: note here is a cbm model
     cbm = torch.load(f'{RootPath}/{concept_model_path}.pt')
-    
-    # x2c.aux_logits = False
-
-    # if independent:    
-    #     x2c = nn.Sequential(x2c, # transition,
-    #                         noise_transition, nn.Sigmoid())
-    # else:
-    #     x2c = nn.Sequential(x2c, # transition,
-    #                         noise_transition)
     
     # unknown concept model
     if u_model_path:
