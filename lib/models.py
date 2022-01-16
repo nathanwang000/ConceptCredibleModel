@@ -141,7 +141,8 @@ class CUB_Noise_Concept_Model(nn.Module):
         d = min(d, self.d)
         std = self.std if hasattr(self, 'std') else 1
         noise = torch.randn(bs, d).to(x.device) * std
-        return torch.cat((noise, x[:, d:]), 1)
+        o = torch.cat((noise, x[:, d:]), 1)
+        return o
 
 class Concat_CS_Model(nn.Module):
     '''

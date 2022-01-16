@@ -45,6 +45,8 @@ def get_args():
                         help="which task to train concept model")
     parser.add_argument("--eval", action="store_true",
                         help="whether or not to eval the learned model")
+    parser.add_argument("--split_val", action="store_true",
+                        help="whether or not to split the validation set (used for ccmr to not reuse training)")
     parser.add_argument("--alpha", default=0, type=float,
                         help="regularization strength for EYE")
     parser.add_argument("--retrain", action="store_true",
@@ -185,8 +187,9 @@ if __name__ == '__main__':
                                                   stratify=train_val_labels,
                                                   random_state=flags.seed)
     # train indices already are used for training CBM, so we split validation in half to train the residual model
-    train_indices, val_indices = train_test_split(val_indices, test_size=0.5,
-                                                  random_state=flags.seed)
+    if flags.split_val:
+        train_indices, val_indices = train_test_split(val_indices, test_size=0.5,
+                                                      random_state=flags.seed)
     
     
     # define dataloader: mimic_train_eval is used to evaluate training data
