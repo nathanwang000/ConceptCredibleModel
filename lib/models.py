@@ -245,6 +245,16 @@ class CCM(nn.Module):
         o_y = self.net_y([o_c, o_u])
         return o_y
 
+class Zero(nn.Module):
+    '''
+    model that output 0
+    '''
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return 0
+    
 class CCM_res(nn.Module):
     '''
     residual CCM
@@ -259,7 +269,8 @@ class CCM_res(nn.Module):
         with torch.no_grad():
             self.net1.eval()
             o = self.net1(x)
-        return o + self.net2(x)
+        u = self.net2(x)
+        return o + u
     
 class CBM(nn.Module):
     '''
