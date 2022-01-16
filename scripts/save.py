@@ -36,10 +36,8 @@ from lib.regularization import EYE, wL2
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-m", "--model_name", required=True,
+    parser.add_argument("model_name",
                         help="what is the model name w/o postfix")
-    parser.add_argument("--task", default="Edema",
-                        help="which task to train concept model")
     parser.add_argument("--seed", type=int, default=42,
                         help="seed for reproducibility")
         
@@ -62,7 +60,7 @@ if __name__ == '__main__':
     loader = load(mimic)
     net = torch.load(f'{model_name}.pt')
     o = get_output(net, loader)
-    torch.save(o, f'{model_name}_{flags.task}.npz')
+    torch.save(o, f'{model_name}.npz')
 
     
     
