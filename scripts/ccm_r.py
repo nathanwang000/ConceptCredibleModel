@@ -130,6 +130,9 @@ def ccm(flags, attr_names, concept_model_path,
 
     # print('task acc before training: {:.1f}%'.format(
     #     run_test(net, loader_xy_te) * 100))
+
+    # print('task train acc before training: {:.1f}%'.format(
+    #     run_test(net, loader_xy_eval) * 100))
     
     # add regularization to both u and c
     # lambda o, y, o_c, c, o_u:
