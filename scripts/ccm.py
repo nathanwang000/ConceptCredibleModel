@@ -287,9 +287,21 @@ if __name__ == '__main__':
                        net_shortcut = net_s)
 
     if flags.eval:
-        print('task acc after training: {:.1f}%'.format(
-            run_test(torch.load(f'{model_name}.pt'),
-                     loader_xyc_te) * 100))
+        # save the evaluation
+        bdir = os.path.dirname(model_name)
+        os.system(f'mkdir -p {bdir}/results')
+        result = run_test(torch.load(f'{model_name}.pt'),
+                          loader_xyc_te)
+        print('task acc after training: {:.1f}%'.format(result * 100))
+        if flags.shortcut == 'clean':
+            threshold = 0
+        else:
+            threshold = flags.threshold
+        torch.save(result,
+                   f'{bdir}/results/{flags.shortcut}-{flags.n_shortcuts}-{threshold}')
+        
+
+
     elif flags.retrain:
         cub_train = CUB_train_transform(Subset(cub, train_val_indices),
                                         mode=flags.transform)

@@ -42,6 +42,7 @@ if __name__ == '__main__':
         base_command += ['--task', flags.task]
 
     for i, shortcut in enumerate(['clean', 'noise', flags.shortcut]):
+        if i == 0: continue # skip the clean one        
         if i == 1: continue # skip the independent noise
         print({'clean': 'clean acc',
                'noise': 't=0 acc',
