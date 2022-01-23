@@ -46,7 +46,7 @@ def get_args():
     parser.add_argument("--eval", action="store_true",
                         help="whether or not to eval the learned model")
     parser.add_argument("--split_val", action="store_true",
-                        help="whether or not to split the validation set (used for ccmr to not reuse training)")
+                        help="whether or not to split the validation set (to not reuse training)")
     parser.add_argument("--alpha", default=0, type=float,
                         help="regularization strength for EYE")
     parser.add_argument("--retrain", action="store_true",

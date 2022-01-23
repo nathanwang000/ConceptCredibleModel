@@ -44,6 +44,8 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-o", "--outputs_dir", default=f"outputs",
                         help="where to save all the outputs")
+    parser.add_argument("--split_val", action="store_true",
+                        help="whether or not to split the validation set (to not reuse training)")
     parser.add_argument("--eval", action="store_true",
                         help="whether or not to eval the learned model")
     parser.add_argument("--retrain", action="store_true",
@@ -145,7 +147,10 @@ if __name__ == '__main__':
     train_indices, val_indices = train_test_split(train_val_indices, test_size=val_ratio,
                                                   stratify=train_val_labels,
                                                   random_state=flags.seed)
-
+    if flags.split_val:
+        train_indices, val_indices = train_test_split(val_indices, test_size=0.5,
+                                                      random_state=flags.seed)
+    
     # define dataloader: cub_train_eval is used to evaluate training data
     cub_train = CUB_train_transform(Subset(cub, train_indices), mode=flags.transform)
     cub_val = CUB_test_transform(Subset(cub, val_indices),  mode=flags.transform)

@@ -49,6 +49,8 @@ def get_args():
                         help="where to save all the outputs")
     parser.add_argument("--eval", action="store_true",
                         help="whether or not to eval the learned model")
+    parser.add_argument("--split_val", action="store_true",
+                        help="whether or not to split the validation set (to not reuse training)")
     parser.add_argument("--task", default="Pneumonia",
                         help="which task to train concept model")
     parser.add_argument("--retrain", action="store_true",
@@ -175,6 +177,10 @@ if __name__ == '__main__':
                                                   stratify=train_val_labels,
                                                   random_state=flags.seed)
 
+    if flags.split_val:
+        train_indices, val_indices = train_test_split(val_indices, test_size=0.5,
+                                                      random_state=flags.seed)
+    
     # define dataloader: mimic_train_eval is used to evaluate training data
     mimic_train = MIMIC_train_transform(Subset(mimic, train_indices), mode=flags.transform)
     mimic_val = MIMIC_test_transform(Subset(mimic, val_indices),  mode=flags.transform)
