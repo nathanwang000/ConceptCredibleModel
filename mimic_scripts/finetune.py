@@ -102,6 +102,7 @@ def standard_model(flags, loader_xy, loader_xy_eval, loader_xy_te, loader_xy_val
     '''
     x2c = torch.load(f'{RootPath}/{flags.c_model_path}.pt')
     x2c.aux_logits = False
+    x2c.fc = nn.Identity() # use last layer representation
     net = nn.Sequential(x2c, nn.Linear(2048, 2)) # mimic is binary
     net.to(device)
     criterion = lambda o, y: F.cross_entropy(o, y)
