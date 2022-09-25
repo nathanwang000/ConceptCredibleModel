@@ -1,3 +1,9 @@
+This is the repository for the paper "Learning Concept Credible Models for Mitigating Shortcuts", to appear in NeurIPS 2022. 
+
+In the coming months, I'll clean up the code and documentation to make it easier for people to build on top of this work.
+
+* logging
+
 I log all the commands ran using 
 #+BEGIN_SRC bash
 track log
