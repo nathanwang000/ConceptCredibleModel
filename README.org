@@ -1,4 +1,14 @@
-* CCM stands for credible concept model
+I log all the commands ran using 
+#+BEGIN_SRC bash
+track log
+#+END_SRC
+
+see how to use my command tracking
+#+BEGIN_SRC bash
+track -h
+#+END_SRC
+
+* CCM stands for concept credible model
 
 It aims to
 
@@ -7,7 +17,7 @@ b) leverage feature based attribution methods for high level features
 
 [[credibility.ipynb][credibility.ipynb]] contains ideas to extend rationale from binary to real number
 
-Three ideas:
+Two ideas:
 1. Extend credible model to tasks with not interpretable raw features
    (eg. latent factors such as angle and others)
 2. Expand interpretability to multimodality context: e.g. image to caption

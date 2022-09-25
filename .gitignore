@@ -1,1 +1,13 @@
 *~
+notebooks/figures/
+notebooks/.ipynb_checkpoints/
+.ipynb_checkpoints/
+ConceptBottleneck/
+datasets
+gold_models
+models
+outputs
+old
+scripts/old
+tmp
+notebooks/*.pkl
