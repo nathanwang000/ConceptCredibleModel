@@ -80,6 +80,11 @@ def code2certainty(code):
             
     return code2name[int(code)]
 
+def get_image_segmentation(filename):
+    pwd = pathlib.Path(__file__).parent.absolute()
+    cls, name = filename.split('/')[-2:]
+    fn = f'{pwd}/../datasets/bird_data/segmentations/{cls}/{name.replace("jpg", "png")}'
+    return fn
 
 def get_image_attributes():
     # n x n_attribute
@@ -317,4 +322,9 @@ def describe_bird(filename):
     ## show image
     plt.axis('off')
     plt.show()
-    
+
+    ## show segmentation
+    im = Image.open(get_image_segmentation(filename))
+    plt.imshow(im)
+    plt.axis('off')
+    plt.show()
