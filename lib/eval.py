@@ -297,37 +297,54 @@ def show_attribution(dataset, models, attributes, idx, explain_method=VanillaBac
         plt.axis('off')
     plt.show()
 
-def show_explanation(dataset, idx, models, explain_method=VanillaBackprop, n_col=5, device='cuda'):
+def show_explanation(dataset, idx, models, explain_method=VanillaBackprop, n_col=6,
+                     device='cuda', explain_target=False, return_outputs=False, names=None):
     '''
     show feature attribution of models to input
+    if explain_target is False, explain predicted class
     '''
     n_row = math.ceil(float(len(models)+1) / n_col)
     input_x, y = dataset[idx]['x'], dataset[idx]['y']
     im = input_x.permute(1,2,0)
     target_class = y
-    print('class id:', y)
+    if not return_outputs:
+        print('class id:', y)
     plt.figure(figsize=(4 * n_col, n_row * 3))
     plt.subplot(n_row, n_col, 1)
     plt.imshow((im - im.min()) / (im.max() - im.min()))
     plt.axis('off')
 
+    outputs = []
     for i, m in enumerate(models):
         explain = explain_method(m) # IntegratedGradients(m)
         # Generate attribution
         x = input_x.unsqueeze(0).to(device)
         pred = m(x).argmax(1).item()
-        attribution = explain.explain(x,
-                                      target_class)
+        if explain_target:
+            attribution = explain.explain(x,
+                                          target_class)
+        else:
+            attribution = explain.explain(x,
+                                          pred)
 
         plt.subplot(n_row, n_col, i+2)
         # save as convert2grayscale image in the online visualization code
+        outputs.append(attribution)
         grad = attribution.permute(1,2,0).abs().sum(-1)
-        print(f'l2^2(grad): {(grad**2).sum()}')
+
+        if not return_outputs:
+            print(f'l2^2(grad): {(grad**2).sum()}')
         # plt.imshow(grad / grad.max(), cmap='twilight')
         plt.imshow((grad - grad.min()) / (grad.max() - grad.min()), cmap='twilight')
-        
-        plt.title(f"{target_class}: pred {pred}" )
+
+        name = f"{names[i]}: " if names else ""
+        plt.title(f"{name}tgt {target_class}, pred {pred}")
         plt.axis('off')
-    plt.show()
-    
+
+    if return_outputs:
+        return outputs
+    else:
+        plt.show()
+
+
 
