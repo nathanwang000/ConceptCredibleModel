@@ -266,7 +266,7 @@ class IntegratedGradients():
             # Add rescaled grads from xbar images
             integrated_grads = integrated_grads + single_integrated_grad/steps
         # [0] to get rid of the first channel (1,3,224,224)
-        # return integrated_grads[0] # should probably times input image by the original paper
+        # return integrated_grads[0] # should probably times input image by the original paper; this doesn't change our visualization conclusion though
         # this differs from the online implementation (their version is wrong b/c it should be scaled by size along each direction, not a global step)
         return (integrated_grads * input_image.cpu())[0] # background value of 0
 
@@ -298,7 +298,8 @@ def show_attribution(dataset, models, attributes, idx, explain_method=VanillaBac
     plt.show()
 
 def show_explanation(dataset, idx, models, explain_method=VanillaBackprop, n_col=6,
-                     device='cuda', explain_target=False, return_outputs=False, names=None):
+                     device='cuda', explain_target=False, return_outputs=False, names=None,
+                     show_title=True):
     '''
     show feature attribution of models to input
     if explain_target is False, explain predicted class
@@ -309,7 +310,7 @@ def show_explanation(dataset, idx, models, explain_method=VanillaBackprop, n_col
     target_class = y
     if not return_outputs:
         print('class id:', y)
-    plt.figure(figsize=(4 * n_col, n_row * 3))
+    plt.figure(figsize=(3.1 * n_col, n_row * 3))
     plt.subplot(n_row, n_col, 1)
     plt.imshow((im - im.min()) / (im.max() - im.min()))
     plt.axis('off')
@@ -337,8 +338,9 @@ def show_explanation(dataset, idx, models, explain_method=VanillaBackprop, n_col
         # plt.imshow(grad / grad.max(), cmap='twilight')
         plt.imshow((grad - grad.min()) / (grad.max() - grad.min()), cmap='twilight')
 
-        name = f"{names[i]}: " if names else ""
-        plt.title(f"{name}tgt {target_class}, pred {pred}")
+        if show_title:        
+            name = f"{names[i]}: " if names else ""
+            plt.title(f"{name}tgt {target_class}, pred {pred}")
         plt.axis('off')
 
     if return_outputs:

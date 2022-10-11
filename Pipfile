@@ -24,6 +24,7 @@ pyyaml = "*"
 scikit-image = "*"
 imgaug = "*"
 brokenaxes = "*"
+grad-cam = "*"
 
 [requires]
 python_version = "3.7"
