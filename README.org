@@ -8,29 +8,53 @@ The code directories are organized as the following
 ~scripts/~ contains the training code for reproducing experiments on CUB birds dataset.
 ~notebooks/~ contains ipython notebook for visualization of the results.
 
-Here is an example of running the baseline models on the CUB dataset:
+Dependencies are listed in Pipfile and can be installed with pipenv.
+
+To run baseline models for the CUB dataset:
+
+Getting concept C:
+#+BEGIN_SRC bash
+python scripts/concept_model.py --transform flip --lr_step 1000 -t 0 -s noise --n_shortcuts 10
+#+END_SRC
+
+Oracle CBM used to generate shortcut
+#+BEGIN_SRC bash
+python scripts/cbm.py --lr_step 15 -s noise -t 1 --n_shortcuts 10 --c_model_path <path to C>/concept
+#+END_SRC
 
 For CBM
 #+BEGIN_SRC bash
-"TODO"
-#+END_SRC
-
-For CCM RES
-#+BEGIN_SRC bash
-"TODO"
-#+END_SRC
-
-For CCM EYE
-#+BEGIN_SRC bash
-"TODO"
+python scripts/cbm.py --lr_step 15 -s <path to oracle CBM>/cbm.pt -t 1 --n_shortcuts 10 --c_model_path outputs/9843d41ae4c711ebb773ac1f6b24a434/concepts
 #+END_SRC
 
 For STD(X)
 #+BEGIN_SRC bash
-"TODO"
+python scripts/standard_model.py -s <path to oracle CBM>/cbm.pt --n_shortcuts 10 -t 1
 #+END_SRC
 
 For STD(C, X)
 #+BEGIN_SRC bash
-"TODO"
+python scripts/ccm.py --lr_step 15 --alpha 0 -s <path to oracle CBM>/cbm.pt -t 1 --n_shortcuts 10 --u_model_path <path to STD(X)> --c_model_path outputs/9843d41ae4c711ebb773ac1f6b24a434/concepts
+#+END_SRC
+
+For CCM RES
+#+BEGIN_SRC bash
+python scripts/ccm_r.py --lr_step 15 -s <path to oracle CBM>/cbm.pt -t 1 --n_shortcuts 10 --u_model_path <path to STD(X)>/standard --c_model_path <path to CBM>/cbm
+#+END_SRC
+
+For CCM EYE
+#+BEGIN_SRC bash
+python scripts/ccm.py --lr_step 15 --alpha 0.001 -s <path to oracle CBM>/cbm.pt -t 1 --n_shortcuts 10 --u_model_path <path to STD(X)>/standard --c_model_path <path to C>/concepts
+#+END_SRC
+
+* logging
+
+I log all the commands ran using 
+#+BEGIN_SRC bash
+track log
+#+END_SRC
+
+see how to use my command tracking
+#+BEGIN_SRC bash
+track -h
 #+END_SRC
